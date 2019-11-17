@@ -58,8 +58,25 @@ export class OrmUtils {
         }, [] as T[]);
     }
 
-    static isObject(item: any) {
-        return (item && typeof item === "object" && !Array.isArray(item));
+    // Checks if it's an object made by Object.create(null), {} or new Object()
+    private static isPlainObject(item: any) {
+        // Filters out undefined, null, function, and primitive array, number, string
+        // Less expensive call than toString
+        const isObject = item != null && typeof item === "object" && !Array.isArray(item);
+        if (!isObject) {
+            return false;
+        }
+
+        // Filters out Date, Set, Map, String, Math, Number and a few others
+        const isObjectObject = Object.prototype.toString.call(item) === "[object Object]";
+        if (!isObjectObject) {
+            return false;
+        }
+
+        // Filters out Buffer and custom instances of classes
+        const prototype = Object.getPrototypeOf(item);
+        return prototype === null || prototype === Object.getPrototypeOf({});
+
     }
 
     /**
@@ -71,20 +88,17 @@ export class OrmUtils {
         if (!sources.length) return target;
         const source = sources.shift();
 
-        if (this.isObject(target) && this.isObject(source)) {
+        if (this.isPlainObject(target) && this.isPlainObject(source)) {
             for (const key in source) {
                 const value = source[key];
                 if (key === "__proto__" || value instanceof Promise)
                     continue;
 
-                if (this.isObject(value)
-                && !(value instanceof Map)
-                && !(value instanceof Set)
-                && !(value instanceof Date)
-                && !(value instanceof Buffer)
-                && !(value instanceof RegExp)) {
-                    if (!target[key])
+                if (this.isPlainObject(value)) {
+                    if (!target[key]) {
                         Object.assign(target, { [key]: Object.create(Object.getPrototypeOf(value)) });
+                    }
+
                     this.mergeDeep(target[key], value);
                 } else {
                     Object.assign(target, { [key]: value });

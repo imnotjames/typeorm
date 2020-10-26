@@ -1,8 +1,8 @@
 ---
-name: "Bug Report 🐛"
+name: "Bug Report \U0001F41B"
 about: Report a reproducible bug or regression.
-title:
-labels: bug
+title: ''
+labels: bug, invalid
 assignees: ''
 
 ---

@@ -3,8 +3,6 @@ import {Connection} from "../connection/Connection";
 import {Migration} from "./Migration";
 import {ObjectLiteral} from "../common/ObjectLiteral";
 import {QueryRunner} from "../query-runner/QueryRunner";
-import {SqlServerDriver} from "../driver/sqlserver/SqlServerDriver";
-import {MssqlParameter} from "../driver/sqlserver/MssqlParameter";
 import {SqlServerConnectionOptions} from "../driver/sqlserver/SqlServerConnectionOptions";
 import {PostgresConnectionOptions} from "../driver/postgres/PostgresConnectionOptions";
 import {MongoDriver} from "../driver/mongodb/MongoDriver";
@@ -446,13 +444,9 @@ export class MigrationExecutor {
      */
     protected async insertExecutedMigration(queryRunner: QueryRunner, migration: Migration): Promise<void> {
         const values: ObjectLiteral = {};
-        if (this.connection.driver instanceof SqlServerDriver) {
-            values["timestamp"] = new MssqlParameter(migration.timestamp, this.connection.driver.normalizeType({ type: this.connection.driver.mappedDataTypes.migrationTimestamp }) as any);
-            values["name"] = new MssqlParameter(migration.name, this.connection.driver.normalizeType({ type: this.connection.driver.mappedDataTypes.migrationName }) as any);
-        } else {
-            values["timestamp"] = migration.timestamp;
-            values["name"] = migration.name;
-        }
+        values["timestamp"] = migration.timestamp;
+        values["name"] = migration.name;
+
         if (this.connection.driver instanceof MongoDriver) {
             const mongoRunner = queryRunner as MongoQueryRunner;
             await mongoRunner.databaseConnection.db(this.connection.driver.database!).collection(this.migrationsTableName).insertOne(values);
@@ -471,13 +465,8 @@ export class MigrationExecutor {
     protected async deleteExecutedMigration(queryRunner: QueryRunner, migration: Migration): Promise<void> {
 
         const conditions: ObjectLiteral = {};
-        if (this.connection.driver instanceof SqlServerDriver) {
-            conditions["timestamp"] = new MssqlParameter(migration.timestamp, this.connection.driver.normalizeType({ type: this.connection.driver.mappedDataTypes.migrationTimestamp }) as any);
-            conditions["name"] = new MssqlParameter(migration.name, this.connection.driver.normalizeType({ type: this.connection.driver.mappedDataTypes.migrationName }) as any);
-        } else {
-            conditions["timestamp"] = migration.timestamp;
-            conditions["name"] = migration.name;
-        }
+        conditions["timestamp"] = migration.timestamp;
+        conditions["name"] = migration.name;
 
         if (this.connection.driver instanceof MongoDriver) {
             const mongoRunner = queryRunner as MongoQueryRunner;

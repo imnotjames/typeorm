@@ -23,6 +23,7 @@ import {IsolationLevel} from "../types/IsolationLevel";
 import {TableExclusion} from "../../schema-builder/table/TableExclusion";
 import {ReplicationMode} from "../types/ReplicationMode";
 import {BroadcasterResult} from "../../subscriber/BroadcasterResult";
+import { UnsupportedDriverFeature } from "../../error/UnsupportedDriverFeature";
 
 /**
  * Runs queries on a single postgres database connection.
@@ -1298,7 +1299,11 @@ export class CockroachQueryRunner extends BaseQueryRunner implements QueryRunner
     /**
      * Removes all tables from the currently connected database.
      */
-    async clearDatabase(): Promise<void> {
+    async clearDatabase(database?: string): Promise<void> {
+        if (database && database !== this.connection.driver.database) {
+            throw new UnsupportedDriverFeature(this.connection.driver, 'clear database by name');
+        }
+
         const schemas: string[] = [];
         this.connection.entityMetadatas
             .filter(metadata => metadata.schema)

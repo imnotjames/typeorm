@@ -22,6 +22,7 @@ import {IsolationLevel} from "../types/IsolationLevel";
 import {SapDriver} from "./SapDriver";
 import {ReplicationMode} from "../types/ReplicationMode";
 import {BroadcasterResult} from "../../subscriber/BroadcasterResult";
+import { UnsupportedDriverFeature } from "../../error/UnsupportedDriverFeature";
 
 /**
  * Runs queries on a single SQL Server database connection.
@@ -1392,7 +1393,11 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
     /**
      * Removes all tables from the currently connected database.
      */
-    async clearDatabase(): Promise<void> {
+    async clearDatabase(database?: string): Promise<void> {
+        if (database && database !== this.connection.driver.database) {
+            throw new UnsupportedDriverFeature(this.connection.driver, 'clear database by name');
+        }
+
         const schemas: string[] = [];
         this.connection.entityMetadatas
             .filter(metadata => metadata.schema)

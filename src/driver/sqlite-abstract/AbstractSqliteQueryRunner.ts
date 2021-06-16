@@ -19,6 +19,7 @@ import {OrmUtils} from "../../util/OrmUtils";
 import {TableCheck} from "../../schema-builder/table/TableCheck";
 import {IsolationLevel} from "../types/IsolationLevel";
 import {TableExclusion} from "../../schema-builder/table/TableExclusion";
+import { UnsupportedDriverFeature } from "../../error/UnsupportedDriverFeature";
 
 /**
  * Runs queries on a single sqlite database connection.
@@ -742,7 +743,11 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
     /**
      * Removes all tables from the currently connected database.
      */
-    async clearDatabase(): Promise<void> {
+    async clearDatabase(database?: string): Promise<void> {
+        if (database && database !== this.connection.driver.database) {
+            throw new UnsupportedDriverFeature(this.connection.driver, 'clear database by name');
+        }
+
         await this.query(`PRAGMA foreign_keys = OFF;`);
         await this.startTransaction();
         try {

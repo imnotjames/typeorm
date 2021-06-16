@@ -33,11 +33,8 @@ import {SqljsEntityManager} from "../entity-manager/SqljsEntityManager";
 import {RelationLoader} from "../query-builder/RelationLoader";
 import {RelationIdLoader} from "../query-builder/RelationIdLoader";
 import {EntitySchema} from "../";
-import {SqlServerDriver} from "../driver/sqlserver/SqlServerDriver";
-import {MysqlDriver} from "../driver/mysql/MysqlDriver";
 import {ObjectUtils} from "../util/ObjectUtils";
 import {IsolationLevel} from "../driver/types/IsolationLevel";
-import {AuroraDataApiDriver} from "../driver/aurora-data-api/AuroraDataApiDriver";
 import {DriverUtils} from "../driver/DriverUtils";
 import {ReplicationMode} from "../driver/types/ReplicationMode";
 
@@ -261,18 +258,25 @@ export class Connection {
     async dropDatabase(): Promise<void> {
         const queryRunner = this.createQueryRunner();
         try {
-            if (this.driver instanceof SqlServerDriver || this.driver instanceof MysqlDriver || this.driver instanceof AuroraDataApiDriver) {
-                const databases: string[] = this.driver.database ? [this.driver.database] : [];
-                this.entityMetadatas.forEach(metadata => {
-                    if (metadata.database && databases.indexOf(metadata.database) === -1)
-                        databases.push(metadata.database);
-                });
+            // We want to clear whatever the current database is
+            await queryRunner.clearDatabase();
 
-                for (const database of databases) {
-                    await queryRunner.clearDatabase(database);
-                }
-            } else {
-                await queryRunner.clearDatabase();
+            const databases = this.entityMetadatas
+                .reduce(
+                    (carry, metadata) => {
+                        if (metadata.database) {
+                            carry.add(metadata.database);
+                        }
+
+                        return carry;
+                    },
+                    new Set<string>()
+                );
+
+            // If the user has set any databases in the entity metadata
+            // we should clear from there too.
+            for (const database of databases) {
+                await queryRunner.clearDatabase(database);
             }
         } finally {
             await queryRunner.release();

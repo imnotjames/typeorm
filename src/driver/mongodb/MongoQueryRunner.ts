@@ -375,8 +375,12 @@ export class MongoQueryRunner implements QueryRunner {
      * Be careful with using this method and avoid using it in production or migrations
      * (because it can clear all your database).
      */
-    async clearDatabase(): Promise<void> {
-        await this.databaseConnection.db(this.connection.driver.database!).dropDatabase();
+    async clearDatabase(database?: string): Promise<void> {
+        if (!database) {
+            database = this.connection.driver.database!
+        }
+
+        await this.databaseConnection.db(database).dropDatabase();
     }
 
     /**

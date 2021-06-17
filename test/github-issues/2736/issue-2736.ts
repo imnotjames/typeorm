@@ -79,7 +79,7 @@ describe.only("github issues > #2736 should run correct query when using querybu
         queryBuilder
             .leftJoinAndSelect("user.services", "service")
             .skip(0)
-            .take()
+            .take(3)
             .addOrderBy("service.title", "DESC");
 
         console.log(queryBuilder.getQuery());
@@ -87,7 +87,7 @@ describe.only("github issues > #2736 should run correct query when using querybu
         const users = await queryBuilder.getMany();
 
         // should return services for user1 and user3
-        expect(users).to.have.length(4);
+        expect(users).to.have.length(3);
 
         // should be in right order
         expect(users).to.eql([
@@ -95,6 +95,8 @@ describe.only("github issues > #2736 should run correct query when using querybu
             user2,
             user3,
         ]);
+
+        
 
     })));
 });

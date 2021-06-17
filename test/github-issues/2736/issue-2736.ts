@@ -4,7 +4,7 @@ import { User } from "./entity/user";
 import { Service } from "./entity/service";
 import { expect } from "chai";
 
-describe("github issues > #2736 should run correct query when using querybuilder with take, skip and orderBy", () => {
+describe.only("github issues > #2736 should run correct query when using querybuilder with take, skip and orderBy", () => {
 
     let connections: Connection[];
     before(async () => {
@@ -57,4 +57,44 @@ describe("github issues > #2736 should run correct query when using querybuilder
 
     })));
 
+    it("should handle ", () => Promise.all(connections.map(async (connection) => {
+
+        // create some users
+        const user1 = new User("user 1");
+        const user2 = new User("user 2");
+        const user3 = new User("user 3");
+
+        // create some services
+        const service1 = new Service("service 1 for user1", user1);
+        const service2 = new Service("service 2 for user1", user1);
+        const service3 = new Service("service 1 for user2", user2);
+        const service4 = new Service("service 1 for user3", user3);
+        const service5 = new Service("service 2 for user3", user3);
+
+        // store entities
+        await connection.manager.save([user1, user2, user3, service1, service2, service3, service4, service5]);
+
+        // create complex QueryBuilder
+        const queryBuilder = connection.getRepository(User).createQueryBuilder("user");
+        queryBuilder
+            .leftJoinAndSelect("user.services", "service")
+            .skip(0)
+            .take()
+            .addOrderBy("service.title", "DESC");
+
+        console.log(queryBuilder.getQuery())
+
+        const users = await queryBuilder.getMany();
+
+        // should return services for user1 and user3
+        expect(users).to.have.length(4);
+
+        // should be in right order
+        expect(users).to.eql([
+            user1,
+            user2,
+            user3,
+        ]);
+
+    })));
 });

@@ -82,7 +82,7 @@ describe.only("github issues > #2736 should run correct query when using querybu
             .take()
             .addOrderBy("service.title", "DESC");
 
-        console.log(queryBuilder.getQuery())
+        console.log(queryBuilder.getQuery());
 
         const users = await queryBuilder.getMany();
 

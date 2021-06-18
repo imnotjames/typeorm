@@ -60,22 +60,11 @@ export class OrmUtils {
 
     // Checks if it's an object made by Object.create(null), {} or new Object()
     private static isPlainObject(item: any) {
-        // Filters out undefined, null, function, and primitive array, number, string
-        // Less expensive call than toString
-        const isObject = item != null && typeof item === "object" && !Array.isArray(item);
-        if (!isObject) {
+        if (typeof item !== "object") {
             return false;
         }
 
-        // Filters out Date, Set, Map, String, Math, Number and a few others
-        const isObjectObject = Object.prototype.toString.call(item) === "[object Object]";
-        if (!isObjectObject) {
-            return false;
-        }
-
-        // Filters out Buffer and custom instances of classes
-        const prototype = Object.getPrototypeOf(item);
-        return prototype === null || prototype === Object.getPrototypeOf({});
+        return !item?.constructor || item?.constructor === Object;
     }
 
     /**
@@ -84,13 +73,15 @@ export class OrmUtils {
      * @see http://stackoverflow.com/a/34749873
      */
     static mergeDeep(target: any, ...sources: any[]): any {
-        if (!sources.length) return target;
+        if (!sources.length) {
+            return target;
+        }
+
         const source = sources.shift();
 
         if (this.isPlainObject(target) && this.isPlainObject(source)) {
-            for (const key in source) {
-                const value = source[key];
-                if (key === "__proto__" || value instanceof Promise)
+            for (const [key, value] of Object.entries(source)) {
+                if (value instanceof Promise)
                     continue;
 
                 if (this.isPlainObject(value)) {

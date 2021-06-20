@@ -21,8 +21,8 @@ export class CordovaDriver extends AbstractSqliteDriver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
-        super(connection);
+    constructor(connection: Connection, options: CordovaConnectionOptions) {
+        super(connection, options);
 
         // this.connection = connection;
         // this.options = connection.options as CordovaConnectionOptions;

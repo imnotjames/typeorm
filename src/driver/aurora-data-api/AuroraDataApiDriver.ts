@@ -296,9 +296,9 @@ export class AuroraDataApiDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
+    constructor(connection: Connection, options: AuroraDataApiConnectionOptions) {
         this.connection = connection;
-        this.options = connection.options as AuroraDataApiConnectionOptions;
+        this.options = options;
 
         // load mysql package
         this.loadDependencies();

@@ -251,13 +251,14 @@ export class PostgresDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection?: Connection) {
-        if (!connection) {
+    constructor(connection?: Connection, options?: PostgresConnectionOptions) {
+        if (!connection || !options) {
+            // Hack to allow using this the AuroraDataApiPostgresDriver
             return;
         }
 
         this.connection = connection;
-        this.options = connection.options as PostgresConnectionOptions;
+        this.options = options;
         this.isReplicated = this.options.replication ? true : false;
         if(this.options.useUTC) {
             process.env.PGTZ = 'UTC';

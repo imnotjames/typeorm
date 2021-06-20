@@ -51,10 +51,11 @@ export class AuroraDataApiPostgresDriver extends PostgresWrapper implements Driv
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
+    constructor(connection: Connection, options: AuroraDataApiPostgresConnectionOptions) {
         super();
+
         this.connection = connection;
-        this.options = connection.options as AuroraDataApiPostgresConnectionOptions;
+        this.options = options;
         this.isReplicated = false;
 
         // load data-api package

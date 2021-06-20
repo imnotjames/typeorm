@@ -300,11 +300,11 @@ export class MysqlDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
+    constructor(connection: Connection, options: MysqlConnectionOptions ) {
         this.connection = connection;
         this.options = {
             legacySpatialSupport: true,
-            ...connection.options
+            ...options
         } as MysqlConnectionOptions;
         this.isReplicated = this.options.replication ? true : false;
 

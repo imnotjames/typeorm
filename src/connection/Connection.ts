@@ -39,6 +39,7 @@ import {IsolationLevel} from "../driver/types/IsolationLevel";
 import {AuroraDataApiDriver} from "../driver/aurora-data-api/AuroraDataApiDriver";
 import {ReplicationMode} from "../driver/types/ReplicationMode";
 import { TypeORMError } from "../error/TypeORMError";
+import {ConnectionMetadataOptions} from "./ConnectionMetadataOptions";
 
 /**
  * Connection is a single database ORM connection to a specific database.
@@ -59,7 +60,7 @@ export class Connection {
     /**
      * Connection options.
      */
-    readonly options: ConnectionOptions;
+    readonly options: ConnectionMetadataOptions;
 
     /**
      * Indicates if connection is initialized or not.
@@ -115,14 +116,25 @@ export class Connection {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(options: ConnectionOptions) {
-        this.name = options.name || "default";
-        this.options = options;
+    constructor(options: ConnectionOptions);
+
+    constructor(driver: Driver, options: ConnectionMetadataOptions);
+
+    constructor(optionsOrDriver: ConnectionOptions | Driver, metadataOptions?: ConnectionMetadataOptions) {
+        if ("connect" in optionsOrDriver) {
+            this.options = metadataOptions!;
+            this.driver = optionsOrDriver;
+        } else {
+            this.options = optionsOrDriver;
+            this.driver = new DriverFactory().create(this, optionsOrDriver);
+        }
+
+        this.name = this.options.name || "default";
         this.logger = new LoggerFactory().create(this.options.logger, this.options.logging);
-        this.driver = new DriverFactory().create(this);
+
         this.manager = this.createEntityManager();
-        this.namingStrategy = options.namingStrategy || new DefaultNamingStrategy();
-        this.queryResultCache = options.cache ? new QueryResultCacheFactory(this).create() : undefined;
+        this.namingStrategy = this.options.namingStrategy || new DefaultNamingStrategy();
+        this.queryResultCache = this.options.cache ? new QueryResultCacheFactory(this).create() : undefined;
         this.relationLoader = new RelationLoader(this);
         this.isConnected = false;
     }

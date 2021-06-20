@@ -1,7 +1,6 @@
 import {QueryRunnerAlreadyReleasedError} from "../../error/QueryRunnerAlreadyReleasedError";
 import {QueryFailedError} from "../../error/QueryFailedError";
 import {AbstractSqliteQueryRunner} from "../sqlite-abstract/AbstractSqliteQueryRunner";
-import {SqliteConnectionOptions} from "./SqliteConnectionOptions";
 import {SqliteDriver} from "./SqliteDriver";
 import {Broadcaster} from "../../subscriber/Broadcaster";
 import { ConnectionIsNotSetError } from '../../error/ConnectionIsNotSetError';
@@ -39,7 +38,7 @@ export class SqliteQueryRunner extends AbstractSqliteQueryRunner {
             throw new QueryRunnerAlreadyReleasedError();
 
         const connection = this.driver.connection;
-        const options = connection.options as SqliteConnectionOptions;
+        const options = this.driver.options;
         const maxQueryExecutionTime = this.driver.options.maxQueryExecutionTime;
 
         if (!connection.isConnected){

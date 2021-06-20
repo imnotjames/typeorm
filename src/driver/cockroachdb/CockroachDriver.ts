@@ -213,9 +213,9 @@ export class CockroachDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
+    constructor(connection: Connection, options: CockroachConnectionOptions) {
         this.connection = connection;
-        this.options = connection.options as CockroachConnectionOptions;
+        this.options = options;
         this.isReplicated = this.options.replication ? true : false;
 
         // load postgres package

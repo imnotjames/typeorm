@@ -212,9 +212,9 @@ export class OracleDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
+    constructor(connection: Connection, options: OracleConnectionOptions) {
         this.connection = connection;
-        this.options = connection.options as OracleConnectionOptions;
+        this.options = options;
 
         if (this.options.useUTC === true) {
             process.env.ORA_SDTZ = 'UTC';

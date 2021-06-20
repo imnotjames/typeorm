@@ -214,9 +214,9 @@ export class SqlServerDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
+    constructor(connection: Connection, options: SqlServerConnectionOptions) {
         this.connection = connection;
-        this.options = connection.options as SqlServerConnectionOptions;
+        this.options = options;
         this.isReplicated = this.options.replication ? true : false;
 
         // load mssql package

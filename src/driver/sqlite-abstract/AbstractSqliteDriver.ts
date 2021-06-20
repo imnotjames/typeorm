@@ -205,10 +205,9 @@ export abstract class AbstractSqliteDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
+    constructor(connection: Connection, options: BaseConnectionOptions) {
         this.connection = connection;
-        this.options = connection.options as BaseConnectionOptions;
-
+        this.options = options;
         this.database = DriverUtils.buildDriverOptions(this.options).database;
     }
 

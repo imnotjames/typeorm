@@ -17,8 +17,8 @@ export class CapacitorDriver extends AbstractSqliteDriver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
-        super(connection);
+    constructor(connection: Connection, options: CapacitorConnectionOptions) {
+        super(connection, options);
 
         this.database = this.options.database;
         this.driver = this.options.driver;

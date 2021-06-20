@@ -207,11 +207,11 @@ export class MongoDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(protected connection: Connection) {
-        this.options = connection.options as MongoConnectionOptions;
+    constructor(protected connection: Connection, options: MongoConnectionOptions) {
+        this.options = options;
 
         // validate options to make sure everything is correct and driver will be able to establish connection
-        this.validateOptions(connection.options);
+        this.validateOptions(this.options);
 
         // load mongodb package
         this.loadDependencies();

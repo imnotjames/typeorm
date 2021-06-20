@@ -34,11 +34,11 @@ export class BetterSqlite3Driver extends AbstractSqliteDriver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
-        super(connection);
+    constructor(connection: Connection, options: BetterSqlite3ConnectionOptions) {
+        super(connection, options);
 
         this.connection = connection;
-        this.options = connection.options as BetterSqlite3ConnectionOptions;
+        this.options = options;
         this.database = this.options.database;
 
         // validate options to make sure everything is set

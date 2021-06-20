@@ -195,9 +195,9 @@ export class SapDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
+    constructor(connection: Connection, options: SapConnectionOptions) {
         this.connection = connection;
-        this.options = connection.options as SapConnectionOptions;
+        this.options = options;
         this.loadDependencies();
 
         this.database = DriverUtils.buildDriverOptions(this.options).database;

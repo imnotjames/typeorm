@@ -13,8 +13,8 @@ export class ExpoDriver extends AbstractSqliteDriver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(connection: Connection) {
-        super(connection);
+    constructor(connection: Connection, options: ExpoConnectionOptions) {
+        super(connection, options);
 
         this.database = this.options.database;
 

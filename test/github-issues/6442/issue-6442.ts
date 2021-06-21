@@ -28,7 +28,7 @@ describe("github issues > #6442 JoinTable does not respect inverseJoinColumns re
 
         await Promise.all(connections.map(async (connection) => {
             const options = setupSingleTestingConnection(
-                connection.options.type,
+                connection.driver.options.type,
                 {
                     name: `${connection.name}-v2`,
                     entities: [__dirname + "/entity/v2/*{.js,.ts}"],

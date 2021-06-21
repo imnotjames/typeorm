@@ -24,7 +24,7 @@ describe("github issues > #5119 migration with foreign key that changes target",
         return Promise.all(
             connections.map(async function(_connection) {
                 const options = setupSingleTestingConnection(
-                    _connection.options.type,
+                    _connection.driver.options.type,
                     {
                         name: `${_connection.name}-v2`,
                         entities: [__dirname + "/entity/v2/*{.js,.ts}"],

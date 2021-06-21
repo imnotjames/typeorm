@@ -16,7 +16,7 @@ describe("github issues > #6115 Down migration for enums with defaults are wrong
 
     it("should change schema when enum definition changes", () => Promise.all(connections.map(async _connection => {
         const options = setupSingleTestingConnection(
-            _connection.options.type,
+            _connection.driver.options.type,
             {
                 name: `${_connection.name}-v2`,
                 entities: [__dirname + "/entity/v2/*{.js,.ts}"],

@@ -14,16 +14,13 @@ import {Brackets} from "./Brackets";
 import {QueryDeepPartialEntity} from "./QueryPartialEntity";
 import {EntityMetadata} from "../metadata/EntityMetadata";
 import {ColumnMetadata} from "../metadata/ColumnMetadata";
-import {PostgresDriver} from "../driver/postgres/PostgresDriver";
-import {CockroachDriver} from "../driver/cockroachdb/CockroachDriver";
-import {SqlServerDriver} from "../driver/sqlserver/SqlServerDriver";
-import {OracleDriver} from "../driver/oracle/OracleDriver";
 import {EntitySchema} from "../entity-schema/EntitySchema";
 import {FindOperator} from "../find-options/FindOperator";
 import {In} from "../find-options/operator/In";
 import {EntityColumnNotFound} from "../error/EntityColumnNotFound";
 import { TypeORMError } from "../error";
 import { WhereClause, WhereClauseCondition } from "./WhereClause";
+import { QueryCompiler } from "../query-compiler/QueryCompiler";
 
 // todo: completely cover query builder with tests
 // todo: entityOrProperty can be target name. implement proper behaviour if it is.
@@ -107,15 +104,6 @@ export abstract class QueryBuilder<Entity> {
             this.expressionMap = new QueryExpressionMap(this.connection);
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Abstract Methods
-    // -------------------------------------------------------------------------
-
-    /**
-     * Gets generated sql query without parameters being replaced.
-     */
-    abstract getQuery(): string;
 
     // -------------------------------------------------------------------------
     // Accessors
@@ -245,7 +233,7 @@ export abstract class QueryBuilder<Entity> {
     }
 
     softDelete(): SoftDeleteQueryBuilder<any> {
-        this.expressionMap.queryType = "soft-delete";
+        this.expressionMap.queryType = "update";
 
         // loading it dynamically because of circular issue
         const SoftDeleteQueryBuilderCls = require("./SoftDeleteQueryBuilder").SoftDeleteQueryBuilder;
@@ -433,6 +421,13 @@ export abstract class QueryBuilder<Entity> {
     }
 
     /**
+     * Gets generated sql query without parameters being replaced.
+     */
+    getQuery(): string {
+        return new QueryCompiler(this.connection, this.expressionMap).getSql();
+    }
+
+    /**
      * Gets query to be executed with all parameters used in it.
      */
     getQueryAndParameters(): [string, any[]] {
@@ -532,33 +527,6 @@ export abstract class QueryBuilder<Entity> {
     // -------------------------------------------------------------------------
 
     /**
-     * Gets escaped table name with schema name if SqlServer driver used with custom
-     * schema name, otherwise returns escaped table name.
-     */
-    protected getTableName(tablePath: string): string {
-        return tablePath.split(".")
-            .map(i => {
-                // this condition need because in SQL Server driver when custom database name was specified and schema name was not, we got `dbName..tableName` string, and doesn't need to escape middle empty string
-                if (i === "")
-                    return i;
-                return this.escape(i);
-            }).join(".");
-    }
-
-    /**
-     * Gets name of the table where insert should be performed.
-     */
-    protected getMainTableName(): string {
-        if (!this.expressionMap.mainAlias)
-            throw new TypeORMError(`Entity where values should be inserted is not specified. Call "qb.into(entity)" method to specify it.`);
-
-        if (this.expressionMap.mainAlias.hasMetadata)
-            return this.expressionMap.mainAlias.metadata.tablePath;
-
-        return this.expressionMap.mainAlias.tablePath!;
-    }
-
-    /**
      * Specifies FROM which entity's table select/update/delete will be executed.
      * Also sets a main string alias of the selection data.
      */
@@ -598,277 +566,6 @@ export abstract class QueryBuilder<Entity> {
                 subQuery: subquery
             });
         }
-    }
-
-    /**
-     * Replaces all entity's propertyName to name in the given statement.
-     */
-    protected replacePropertyNames(statement: string) {
-        // Escape special characters in regular expressions
-        // Per https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions#Escaping
-        const escapeRegExp = (s: String) => s.replace(/[.*+\-?^${}()|[\]\\]/g, "\\$&");
-
-        for (const alias of this.expressionMap.aliases) {
-            if (!alias.hasMetadata) continue;
-            const replaceAliasNamePrefix = this.expressionMap.aliasNamePrefixingEnabled ? `${alias.name}.` : "";
-            const replacementAliasNamePrefix = this.expressionMap.aliasNamePrefixingEnabled ? `${this.escape(alias.name)}.` : "";
-
-            const replacements: { [key: string]: string } = {};
-
-            // Insert & overwrite the replacements from least to most relevant in our replacements object.
-            // To do this we iterate and overwrite in the order of relevance.
-            // Least to Most Relevant:
-            // * Relation Property Path to first join column key
-            // * Relation Property Path + Column Path
-            // * Column Database Name
-            // * Column Propety Name
-            // * Column Property Path
-
-            for (const relation of alias.metadata.relations) {
-                if (relation.joinColumns.length > 0)
-                    replacements[relation.propertyPath] = relation.joinColumns[0].databaseName;
-            }
-
-            for (const relation of alias.metadata.relations) {
-                for (const joinColumn of [...relation.joinColumns, ...relation.inverseJoinColumns]) {
-                    const propertyKey = `${relation.propertyPath}.${joinColumn.referencedColumn!.propertyPath}`;
-                    replacements[propertyKey] = joinColumn.databaseName;
-                }
-            }
-
-            for (const column of alias.metadata.columns) {
-                replacements[column.databaseName] = column.databaseName;
-            }
-
-            for (const column of alias.metadata.columns) {
-                replacements[column.propertyName] = column.databaseName;
-            }
-
-            for (const column of alias.metadata.columns) {
-                replacements[column.propertyPath] = column.databaseName;
-            }
-
-            const replacementKeys = Object.keys(replacements);
-
-            if (replacementKeys.length) {
-                statement = statement.replace(new RegExp(
-                    // Avoid a lookbehind here since it's not well supported
-                    `([ =\(]|^.{0})` +
-                    `${escapeRegExp(replaceAliasNamePrefix)}(${replacementKeys.map(escapeRegExp).join("|")})` +
-                    `(?=[ =\)\,]|.{0}$)`,
-                    "gm"
-                ), (_, pre, p) =>
-                    `${pre}${replacementAliasNamePrefix}${this.escape(replacements[p])}`
-                );
-            }
-        }
-
-        return statement;
-    }
-
-    protected createComment(): string {
-        if (!this.expressionMap.comment) {
-            return "";
-        }
-
-        // ANSI SQL 2003 support C style comments - comments that start with `/*` and end with `*/`
-        // In some dialects query nesting is available - but not all.  Because of this, we'll need
-        // to scrub "ending" characters from the SQL but otherwise we can leave everything else
-        // as-is and it should be valid.
-
-        return `/* ${this.expressionMap.comment.replace("*/", "")} */ `;
-    }
-
-    /**
-     * Creates "WHERE" expression.
-     */
-    protected createWhereExpression() {
-        const conditionsArray = [];
-
-        const whereExpression = this.createWhereClausesExpression(this.expressionMap.wheres);
-
-        if (whereExpression.length > 0 && whereExpression !== "1=1") {
-            conditionsArray.push(this.replacePropertyNames(whereExpression));
-        }
-
-        if (this.expressionMap.mainAlias!.hasMetadata) {
-            const metadata = this.expressionMap.mainAlias!.metadata;
-            // Adds the global condition of "non-deleted" for the entity with delete date columns in select query.
-            if (this.expressionMap.queryType === "select" && !this.expressionMap.withDeleted && metadata.deleteDateColumn) {
-                const column = this.expressionMap.aliasNamePrefixingEnabled
-                    ? this.expressionMap.mainAlias!.name + "." + metadata.deleteDateColumn.propertyName
-                    : metadata.deleteDateColumn.propertyName;
-
-                const condition = `${this.replacePropertyNames(column)} IS NULL`;
-                conditionsArray.push(condition);
-            }
-
-            if (metadata.discriminatorColumn && metadata.parentEntityMetadata) {
-                const column = this.expressionMap.aliasNamePrefixingEnabled
-                    ? this.expressionMap.mainAlias!.name + "." + metadata.discriminatorColumn.databaseName
-                    : metadata.discriminatorColumn.databaseName;
-
-                const condition = `${this.replacePropertyNames(column)} IN (:...discriminatorColumnValues)`;
-                conditionsArray.push(condition);
-            }
-        }
-
-        if (this.expressionMap.extraAppendedAndWhereCondition) {
-            const condition = this.replacePropertyNames(this.expressionMap.extraAppendedAndWhereCondition);
-            conditionsArray.push(condition);
-        }
-
-        if (!conditionsArray.length) {
-            return "";
-        } else if (conditionsArray.length === 1) {
-            return ` WHERE ${conditionsArray[0]}`;
-        } else {
-            return ` WHERE ( ${conditionsArray.join(" ) AND ( ")} )`;
-        }
-    }
-
-    /**
-     * Creates "RETURNING" / "OUTPUT" expression.
-     */
-    protected createReturningExpression(): string {
-        const columns = this.getReturningColumns();
-        const driver = this.connection.driver;
-
-        // also add columns we must auto-return to perform entity updation
-        // if user gave his own returning
-        if (typeof this.expressionMap.returning !== "string" &&
-            this.expressionMap.extraReturningColumns.length > 0 &&
-            driver.isReturningSqlSupported()) {
-            columns.push(...this.expressionMap.extraReturningColumns.filter(column => {
-                return columns.indexOf(column) === -1;
-            }));
-        }
-
-        if (columns.length) {
-            let columnsExpression = columns.map(column => {
-                const name = this.escape(column.databaseName);
-                if (driver instanceof SqlServerDriver) {
-                    if (this.expressionMap.queryType === "insert" || this.expressionMap.queryType === "update" || this.expressionMap.queryType === "soft-delete" || this.expressionMap.queryType === "restore") {
-                        return "INSERTED." + name;
-                    } else {
-                        return this.escape(this.getMainTableName()) + "." + name;
-                    }
-                } else {
-                    return name;
-                }
-            }).join(", ");
-
-            if (driver instanceof OracleDriver) {
-                columnsExpression += " INTO " + columns.map(column => {
-                    return this.createParameter({ type: driver.columnTypeToNativeParameter(column.type), dir: driver.oracle.BIND_OUT });
-                }).join(", ");
-            }
-
-            if (driver instanceof SqlServerDriver) {
-                if (this.expressionMap.queryType === "insert" || this.expressionMap.queryType === "update") {
-                    columnsExpression += " INTO @OutputTable";
-                }
-            }
-
-            return columnsExpression;
-
-        } else if (typeof this.expressionMap.returning === "string") {
-            return this.expressionMap.returning;
-        }
-
-        return "";
-    }
-
-    /**
-     * If returning / output cause is set to array of column names,
-     * then this method will return all column metadatas of those column names.
-     */
-    protected getReturningColumns(): ColumnMetadata[] {
-        const columns: ColumnMetadata[] = [];
-        if (Array.isArray(this.expressionMap.returning)) {
-            (this.expressionMap.returning as string[]).forEach(columnName => {
-                if (this.expressionMap.mainAlias!.hasMetadata) {
-                    columns.push(...this.expressionMap.mainAlias!.metadata.findColumnsWithPropertyPath(columnName));
-                }
-            });
-        }
-        return columns;
-    }
-
-    protected createWhereClausesExpression(clauses: WhereClause[]): string {
-        return clauses.map((clause, index) => {
-            const expression = this.createWhereConditionExpression(clause.condition);
-
-            switch (clause.type) {
-                case "and":
-                    return (index > 0 ? "AND " : "") + expression;
-                case "or":
-                    return (index > 0 ? "OR " : "") + expression;
-            }
-
-            return expression;
-        }).join(" ").trim();
-    }
-
-    /**
-     * Computes given where argument - transforms to a where string all forms it can take.
-     */
-    protected createWhereConditionExpression(condition: WhereClauseCondition): string {
-        if (typeof condition === "string")
-            return condition;
-
-        if (Array.isArray(condition)) {
-            if (condition.length === 0) {
-                return "1=1";
-            }
-
-            if (condition.length === 1) {
-                return this.createWhereClausesExpression(condition);
-            }
-
-            return "(" + this.createWhereClausesExpression(condition) + ")";
-        }
-
-        const { driver } = this.connection;
-
-        switch (condition.operator) {
-            case "lessThan":
-                return `${condition.parameters[0]} < ${condition.parameters[1]}`;
-            case "lessThanOrEqual":
-                return `${condition.parameters[0]} <= ${condition.parameters[1]}`;
-            case "moreThan":
-                return `${condition.parameters[0]} > ${condition.parameters[1]}`;
-            case "moreThanOrEqual":
-                return `${condition.parameters[0]} >= ${condition.parameters[1]}`;
-            case "notEqual":
-                return `${condition.parameters[0]} != ${condition.parameters[1]}`;
-            case "equal":
-                return `${condition.parameters[0]} = ${condition.parameters[1]}`;
-            case "ilike":
-                if (driver instanceof PostgresDriver || driver instanceof CockroachDriver) {
-                    return `${condition.parameters[0]} ILIKE ${condition.parameters[1]}`;
-                }
-
-                return `UPPER(${condition.parameters[0]}) LIKE UPPER(${condition.parameters[1]})`;
-            case "like":
-                return `${condition.parameters[0]} LIKE ${condition.parameters[1]}`;
-            case "between":
-                return `${condition.parameters[0]} BETWEEN ${condition.parameters[1]} AND ${condition.parameters[2]}`;
-            case "in":
-                if (condition.parameters.length <= 1) {
-                    return "0=1";
-                }
-                return `${condition.parameters[0]} IN (${condition.parameters.slice(1).join(", ")})`;
-            case "any":
-                return `${condition.parameters[0]} = ANY(${condition.parameters[1]})`;
-            case "isNull":
-                return `${condition.parameters[0]} IS NULL`;
-
-            case "not":
-                return `NOT(${this.createWhereConditionExpression(condition.condition)})`;
-        }
-
-        throw new TypeError(`Unsupported FindOperator ${FindOperator.constructor.name}`);
     }
 
     /**

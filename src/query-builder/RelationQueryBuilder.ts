@@ -9,18 +9,6 @@ import { TypeORMError } from "../error";
  * todo: add transactions everywhere
  */
 export class RelationQueryBuilder<Entity> extends QueryBuilder<Entity> {
-
-    // -------------------------------------------------------------------------
-    // Public Implemented Methods
-    // -------------------------------------------------------------------------
-
-    /**
-     * Gets generated sql query without parameters being replaced.
-     */
-    getQuery(): string {
-        return "";
-    }
-
     // -------------------------------------------------------------------------
     // Public Methods
     // -------------------------------------------------------------------------

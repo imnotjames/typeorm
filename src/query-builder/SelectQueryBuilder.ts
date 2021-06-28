@@ -1831,38 +1831,50 @@ export class SelectQueryBuilder<Entity> extends QueryBuilder<Entity> implements 
     }
 
     private computeCountExpression() {
+        // If we aren't doing anything that will create a join, we can use a simpler `COUNT` instead
+        // so we prevent poor query patterns in the most likely cases
+        if (
+            this.expressionMap.joinAttributes.length === 0 &&
+            this.expressionMap.relationIdAttributes.length === 0 &&
+            this.expressionMap.relationCountAttributes.length === 0 &&
+            this.expressionMap.selectDistinctOn.length === 0
+        ) {
+            return "COUNT(1)";
+        }
+
         const mainAlias = this.expressionMap.mainAlias!.name; // todo: will this work with "fromTableName"?
         const metadata = this.expressionMap.mainAlias!.metadata;
 
         const primaryColumns = metadata.primaryColumns;
         const distinctAlias = this.escape(mainAlias);
 
-        // If we aren't doing anything that will create a join, we can use a simpler `COUNT` instead
-        // so we prevent poor query patterns in the most likely cases
-        if (
-            this.expressionMap.joinAttributes.length === 0 &&
-            this.expressionMap.relationIdAttributes.length === 0 &&
-            this.expressionMap.relationCountAttributes.length === 0
-        ) {
-            return "COUNT(1)";
+        // For everything else, we'll need to do some hackery to get the correct count values.
+
+        const distinctColumns = [];
+
+        if (this.expressionMap.selectDistinctOn.length > 0) {
+            distinctColumns.push(
+                ...this.expressionMap.selectDistinctOn
+            );
+        } else {
+            distinctColumns.push(
+                ...primaryColumns.map(
+                    c => `${distinctAlias}.${this.escape(c.databaseName)}`
+                )
+            );
         }
 
-        // For everything else, we'll need to do some hackery to get the correct count values.
 
         if (this.connection.driver instanceof CockroachDriver || this.connection.driver instanceof PostgresDriver) {
             // Postgres and CockroachDB can pass multiple parameters to the `DISTINCT` function
             // https://www.postgresql.org/docs/9.5/sql-select.html#SQL-DISTINCT
-            return "COUNT(DISTINCT(" +
-                primaryColumns.map(c => `${distinctAlias}.${this.escape(c.databaseName)}`).join(", ") +
-                "))";
+            return "COUNT(DISTINCT(" + distinctColumns.join(", ") + "))";
         }
 
         if (this.connection.driver instanceof MysqlDriver) {
             // MySQL & MariaDB can pass multiple parameters to the `DISTINCT` language construct
             // https://mariadb.com/kb/en/count-distinct/
-            return "COUNT(DISTINCT " +
-                primaryColumns.map(c => `${distinctAlias}.${this.escape(c.databaseName)}`).join(", ") +
-                ")";
+            return "COUNT(DISTINCT " + distinctColumns.join(", ") + ")";
         }
 
         if (this.connection.driver instanceof SqlServerDriver) {
@@ -1871,9 +1883,7 @@ export class SelectQueryBuilder<Entity> extends QueryBuilder<Entity> implements 
             // characteristic for concatenating, so we gotta use the `CONCAT` function.
             // However, If it's exactly 1 column we can omit the `CONCAT` for better performance.
 
-            const columnsExpression = primaryColumns.map(
-                primaryColumn => `${distinctAlias}.${this.escape(primaryColumn.databaseName)}`
-            ).join(", '|;|', ");
+            const columnsExpression = distinctColumns.join(", '|;|', ");
 
             if (primaryColumns.length === 1) {
 

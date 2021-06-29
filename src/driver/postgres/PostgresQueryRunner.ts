@@ -2209,6 +2209,10 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
         const result = await this.query(`SELECT "udt_schema", "udt_name" ` +
             `FROM "information_schema"."columns" WHERE "table_schema" = '${schema}' AND "table_name" = '${name}' AND "column_name"='${column.name}'`);
 
+        if (result.length === 0) {
+            throw new Error(`User Defined Type for column "${column.name}" was not found in the "${table.name}" table.`);
+        }
+
         // docs: https://www.postgresql.org/docs/current/xtypes.html
         // When you define a new base type, PostgreSQL automatically provides support for arrays of that type.
         // The array type typically has the same name as the base type with the underscore character (_) prepended.

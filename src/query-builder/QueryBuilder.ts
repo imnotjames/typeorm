@@ -24,6 +24,7 @@ import {In} from "../find-options/operator/In";
 import {EntityColumnNotFound} from "../error/EntityColumnNotFound";
 import { TypeORMError } from "../error";
 import { WhereClause, WhereClauseCondition } from "./WhereClause";
+import { ColumnType } from "../driver/types/ColumnTypes";
 
 // todo: completely cover query builder with tests
 // todo: entityOrProperty can be target name. implement proper behaviour if it is.
@@ -731,68 +732,71 @@ export abstract class QueryBuilder<Entity> {
      * Creates "RETURNING" / "OUTPUT" expression.
      */
     protected createReturningExpression(): string {
-        const columns = this.getReturningColumns();
-        const driver = this.connection.driver;
-
-        // also add columns we must auto-return to perform entity updation
-        // if user gave his own returning
-        if (typeof this.expressionMap.returning !== "string" &&
-            this.expressionMap.extraReturningColumns.length > 0 &&
-            driver.isReturningSqlSupported()) {
-            columns.push(...this.expressionMap.extraReturningColumns.filter(column => {
-                return columns.indexOf(column) === -1;
-            }));
-        }
-
-        if (columns.length) {
-            let columnsExpression = columns.map(column => {
-                const name = this.escape(column.databaseName);
-                if (driver instanceof SqlServerDriver) {
-                    if (this.expressionMap.queryType === "insert" || this.expressionMap.queryType === "update" || this.expressionMap.queryType === "soft-delete" || this.expressionMap.queryType === "restore") {
-                        return "INSERTED." + name;
-                    } else {
-                        return this.escape(this.getMainTableName()) + "." + name;
-                    }
-                } else {
-                    return name;
-                }
-            }).join(", ");
-
-            if (driver instanceof OracleDriver) {
-                columnsExpression += " INTO " + columns.map(column => {
-                    return this.createParameter({ type: driver.columnTypeToNativeParameter(column.type), dir: driver.oracle.BIND_OUT });
-                }).join(", ");
-            }
-
-            if (driver instanceof SqlServerDriver) {
-                if (this.expressionMap.queryType === "insert" || this.expressionMap.queryType === "update") {
-                    columnsExpression += " INTO @OutputTable";
-                }
-            }
-
-            return columnsExpression;
-
-        } else if (typeof this.expressionMap.returning === "string") {
+        if (typeof this.expressionMap.returning === "string") {
             return this.expressionMap.returning;
         }
 
-        return "";
-    }
+        const driver = this.connection.driver;
+        const returning: string[] = [];
+        const returningTypes: ColumnType[] = [];
 
-    /**
-     * If returning / output cause is set to array of column names,
-     * then this method will return all column metadatas of those column names.
-     */
-    protected getReturningColumns(): ColumnMetadata[] {
-        const columns: ColumnMetadata[] = [];
-        if (Array.isArray(this.expressionMap.returning)) {
-            (this.expressionMap.returning as string[]).forEach(columnName => {
-                if (this.expressionMap.mainAlias!.hasMetadata) {
-                    columns.push(...this.expressionMap.mainAlias!.metadata.findColumnsWithPropertyPath(columnName));
+        if (this.expressionMap.mainAlias!.hasMetadata) {
+            const columns: ColumnMetadata[] = [];
+
+            if (Array.isArray(this.expressionMap.returning)) {
+                for (const columnPropertyPath of this.expressionMap.returning) {
+                    columns.push(...this.expressionMap.mainAlias!.metadata.findColumnsWithPropertyPath(columnPropertyPath));
                 }
-            });
+            }
+
+            returning.push(...columns.map(c => c.databaseName));
+            returningTypes.push(...columns.map(c => c.type));
+        } else {
+            returning.push(...this.expressionMap.returning);
+            returning.push(...this.expressionMap.returning.map(() => "char"));
         }
-        return columns;
+
+        if (driver.isReturningSqlSupported()) {
+            for (const column of this.expressionMap.extraReturningColumns) {
+                if (returning.includes(column.databaseName)) {
+                    continue;
+                }
+
+                returning.push(column.databaseName);
+                returningTypes.push(column.type);
+            }
+        }
+
+        if (returning.length) {
+            const returningExpression = returning.map(name => {
+                if (driver instanceof SqlServerDriver) {
+                    if (this.expressionMap.queryType === "insert" || this.expressionMap.queryType === "update" || this.expressionMap.queryType === "soft-delete" || this.expressionMap.queryType === "restore") {
+                        return "INSERTED." + this.escape(name);
+                    } else {
+                        return this.escape(this.getMainTableName()) + "." + this.escape(name);
+                    }
+                } else {
+                    return this.escape(name);
+                }
+            }).join(", ");
+
+            if (driver instanceof SqlServerDriver) {
+                if (this.expressionMap.queryType === "insert" || this.expressionMap.queryType === "update") {
+                    return returningExpression + " INTO @OutputTable";
+                }
+            }
+
+            if (driver instanceof OracleDriver) {
+                return returningExpression + " INTO " + returningTypes.map(type => {
+                    return this.createParameter({ type: driver.columnTypeToNativeParameter(type), dir: driver.oracle.BIND_OUT });
+                }).join(", ");
+            }
+
+            return returningExpression;
+
+        }
+
+        return "";
     }
 
     protected createWhereClausesExpression(clauses: WhereClause[]): string {

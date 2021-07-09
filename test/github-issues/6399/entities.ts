@@ -6,6 +6,22 @@ import {ChildEntity} from "../../../src";
 import {JoinColumn} from "../../../src";
 
 @Entity()
+@TableInheritance({column: {type: "string", name: "postType"}})
+export class Post {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column()
+    title: string;
+
+    @Column()
+    postType: string = "BasePost";
+
+    @OneToMany(() => Comment, (entity) => entity.post)
+    comments?: Comment[];
+}
+
+@Entity()
 export class Comment {
     @PrimaryGeneratedColumn()
     id: number;
@@ -25,22 +41,6 @@ export class Comment {
     })
     post?: Post;
 
-}
-
-@Entity()
-@TableInheritance({column: {type: "string", name: "postType"}})
-export class Post {
-    @PrimaryGeneratedColumn()
-    id: number;
-
-    @Column()
-    title: string;
-
-    @Column()
-    postType: string = "BasePost";
-
-    @OneToMany(() => Comment, (entity) => entity.post)
-    comments?: Comment[];
 }
 
 @ChildEntity("TargetPost")

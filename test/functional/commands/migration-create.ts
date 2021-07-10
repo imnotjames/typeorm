@@ -1,10 +1,10 @@
 import sinon from "sinon";
 import { ConnectionOptions, ConnectionOptionsReader, DatabaseType } from "../../../src";
-import { 
-    setupTestingConnections, 
-    createTestingConnections, 
-    closeTestingConnections, 
-    reloadTestingDatabases 
+import {
+    setupTestingConnections,
+    createTestingConnections,
+    closeTestingConnections,
+    reloadTestingDatabases
 } from "../../utils/test-utils";
 import { CommandUtils } from "../../../src/commands/CommandUtils";
 import { MigrationCreateCommand } from "../../../src/commands/MigrationCreateCommand";
@@ -65,9 +65,7 @@ describe("commands - migration create", () => {
         createFileStub.restore();
     });
 
-    afterEach(async () => {
-        getConnectionOptionsStub.restore();
-    });
+    afterEach(( ) => getConnectionOptionsStub?.restore());
 
     it("should write regular empty migration file when no option is passed", async () => {
         for (const connectionOption of connectionOptions) {

@@ -801,13 +801,17 @@ export class EntityMetadata {
 
         this.engine = this.tableMetadataArgs.engine;
         this.database = this.tableMetadataArgs.type === "entity-child" && this.parentEntityMetadata ? this.parentEntityMetadata.database : this.tableMetadataArgs.database;
+
+        if (!this.database) {
+            this.database = this.connection.driver.database;
+        }
+
         if (this.tableMetadataArgs.schema) {
             this.schema = this.tableMetadataArgs.schema;
-        }
-        else if ((this.tableMetadataArgs.type === "entity-child") && this.parentEntityMetadata) {
+        } else if ((this.tableMetadataArgs.type === "entity-child") && this.parentEntityMetadata?.schema) {
             this.schema = this.parentEntityMetadata.schema;
-        } else if (this.connection.options?.hasOwnProperty("schema")) {
-            this.schema = (this.connection.options as any).schema;
+        } else {
+            this.schema = this.connection.driver.schema;
         }
         this.givenTableName = this.tableMetadataArgs.type === "entity-child" && this.parentEntityMetadata ? this.parentEntityMetadata.givenTableName : this.tableMetadataArgs.name;
         this.synchronize = this.tableMetadataArgs.synchronize === false ? false : true;

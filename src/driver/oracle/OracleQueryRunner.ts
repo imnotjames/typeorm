@@ -95,20 +95,14 @@ export class OracleQueryRunner extends BaseQueryRunner implements QueryRunner {
      * Releases used database connection.
      * You cannot use query runner methods once its released.
      */
-    release(): Promise<void> {
-        return new Promise<void>((ok, fail) => {
-            this.isReleased = true;
-            if (this.databaseConnection) {
-                this.databaseConnection.close((err: any) => {
-                    if (err)
-                        return fail(err);
+    async release(): Promise<void> {
+        this.isReleased = true;
 
-                    ok();
-                });
-            } else {
-                ok();
-            }
-        });
+        if (!this.databaseConnection) {
+            return;
+        }
+
+        await this.databaseConnection.close();
     }
 
     /**
@@ -185,59 +179,51 @@ export class OracleQueryRunner extends BaseQueryRunner implements QueryRunner {
         if (this.isReleased)
             throw new QueryRunnerAlreadyReleasedError();
 
-        return new Promise(async (ok, fail) => {
-            try {
-                this.driver.connection.logger.logQuery(query, parameters, this);
-                const queryStartTime = +new Date();
+        const databaseConnection = await this.connect();
 
-                const handler = (err: any, raw: any) => {
+        this.driver.connection.logger.logQuery(query, parameters, this);
+        const queryStartTime = +new Date();
 
-                    // log slow queries if maxQueryExecution time is set
-                    const maxQueryExecutionTime = this.driver.options.maxQueryExecutionTime;
-                    const queryEndTime = +new Date();
-                    const queryExecutionTime = queryEndTime - queryStartTime;
-                    if (maxQueryExecutionTime && queryExecutionTime > maxQueryExecutionTime)
-                        this.driver.connection.logger.logQuerySlow(queryExecutionTime, query, parameters, this);
+        try {
+            const executionOptions = {
+                autoCommit: !this.isTransactionActive,
+                outFormat: this.driver.oracle.OBJECT,
+            };
 
-                    if (err) {
-                        this.driver.connection.logger.logQueryError(err, query, parameters, this);
-                        return fail(new QueryFailedError(query, parameters, err));
-                    }
+            const raw = await databaseConnection.execute(query, parameters || {}, executionOptions);
 
-                    const result = new QueryResult();
+            // log slow queries if maxQueryExecution time is set
+            const maxQueryExecutionTime = this.driver.options.maxQueryExecutionTime;
+            const queryEndTime = +new Date();
+            const queryExecutionTime = queryEndTime - queryStartTime;
+            if (maxQueryExecutionTime && queryExecutionTime > maxQueryExecutionTime)
+                this.driver.connection.logger.logQuerySlow(queryExecutionTime, query, parameters, this);
 
-                    result.raw = raw.rows || raw.outBinds || raw.rowsAffected;
+            const result = new QueryResult();
 
-                    if (raw?.hasOwnProperty('rows') && Array.isArray(raw.rows)) {
-                        result.records = raw.rows;
-                    }
+            result.raw = raw.rows || raw.outBinds || raw.rowsAffected;
 
-                    if (raw?.hasOwnProperty('outBinds') && Array.isArray(raw.outBinds)) {
-                        result.records = raw.outBinds;
-                    }
-
-                    if (raw?.hasOwnProperty('rowsAffected')) {
-                        result.affected = raw.rowsAffected;
-                    }
-
-                    if (useStructuredResult) {
-                        ok(result);
-                    } else {
-                        ok(result.raw);
-                    }
-                };
-                const executionOptions = {
-                    autoCommit: this.isTransactionActive ? false : true,
-                    outFormat: this.driver.oracle.OBJECT,
-                };
-
-                const databaseConnection = await this.connect();
-                databaseConnection.execute(query, parameters || {}, executionOptions, handler);
-
-            } catch (err) {
-                fail(err);
+            if (raw?.hasOwnProperty('rows') && Array.isArray(raw.rows)) {
+                result.records = raw.rows;
             }
-        });
+
+            if (raw?.hasOwnProperty('outBinds') && Array.isArray(raw.outBinds)) {
+                result.records = raw.outBinds;
+            }
+
+            if (raw?.hasOwnProperty('rowsAffected')) {
+                result.affected = raw.rowsAffected;
+            }
+
+            if (useStructuredResult) {
+                return result;
+            } else {
+                return result.raw;
+            }
+        } catch (err) {
+            this.driver.connection.logger.logQueryError(err, query, parameters, this);
+            throw new QueryFailedError(query, parameters, err);
+        }
     }
 
     /**
@@ -266,7 +252,15 @@ export class OracleQueryRunner extends BaseQueryRunner implements QueryRunner {
      * Checks if database with the given name exist.
      */
     async hasDatabase(database: string): Promise<boolean> {
-        return Promise.resolve(false);
+        try {
+            const query = await this.query(
+                `SELECT 1 AS "exists" FROM global_name@"${database}"`
+            )
+
+            return query.length > 0;
+        } catch (e) {
+            return false;
+        }
     }
 
     /**
@@ -316,7 +310,24 @@ export class OracleQueryRunner extends BaseQueryRunner implements QueryRunner {
      * Creates a new database.
      */
     async createDatabase(database: string, ifNotExist?: boolean): Promise<void> {
-        await this.query(`CREATE DATABASE IF NOT EXISTS "${database}"`);
+        // Even with `IF NOT EXISTS` we get:
+        //   ORA-01501: CREATE DATABASE failed
+        //   ORA-01100: database already mounted
+        if (ifNotExist) {
+            try {
+                await this.query(`CREATE DATABASE IF NOT EXISTS "${database}";`);
+            } catch (e) {
+                if (e instanceof QueryFailedError) {
+                    if (e.message.includes("ORA-01100: database already mounted")) {
+                        return;
+                    }
+                }
+
+                throw e;
+            }
+        } else {
+            await this.query(`CREATE DATABASE "${database}"`);
+        }
     }
 
     /**

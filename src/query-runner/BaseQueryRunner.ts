@@ -201,36 +201,23 @@ export abstract class BaseQueryRunner {
     // Protected Methods
     // -------------------------------------------------------------------------
 
-    /**
-     * Gets view from previously loaded views, otherwise loads it from database.
-     */
-    protected async getCachedView(viewName: string): Promise<View> {
-        const view = this.loadedViews.find(view => view.name === viewName);
-        if (view) return view;
-
-        const foundViews = await this.loadViews([viewName]);
-        if (foundViews.length > 0) {
-            this.loadedViews.push(foundViews[0]);
-            return foundViews[0];
-        } else {
-            throw new TypeORMError(`View "${viewName}" does not exist.`);
+    protected async getTableOrFail(tablePath: string): Promise<Table> {
+        const foundTables = await this.loadTables([ tablePath]);
+        if (foundTables.length === 0) {
+            throw new TypeORMError(`Table "${tablePath}" does not exist.`);
         }
+
+        return foundTables[0];
     }
 
-    /**
-     * Gets table from previously loaded tables, otherwise loads it from database.
-     */
-    protected async getCachedTable(tableName: string): Promise<Table> {
-        const table = this.loadedTables.find(table => table.name === tableName);
-        if (table) return table;
+    protected async getViewOrFail(viewPath: string): Promise<View> {
+        const foundViews = await this.loadViews([viewPath]);
 
-        const foundTables = await this.loadTables([tableName]);
-        if (foundTables.length > 0) {
-            this.loadedTables.push(foundTables[0]);
-            return foundTables[0];
-        } else {
-            throw new TypeORMError(`Table "${tableName}" does not exist.`);
+        if (foundViews.length === 0) {
+            throw new TypeORMError(`View "${viewPath}" does not exist.`);
         }
+
+        return foundViews[0];
     }
 
     /**

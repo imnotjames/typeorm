@@ -456,7 +456,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
         // if dropTable called with dropForeignKeys = true, we must create foreign keys in down query.
         const createForeignKeys: boolean = dropForeignKeys;
         const tableName = target instanceof Table ? target.name : target;
-        const table = await this.getCachedTable(tableName);
+        const table = await this.getTableOrFail(tableName);
         const upQueries: Query[] = [];
         const downQueries: Query[] = [];
 
@@ -495,7 +495,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      */
     async dropView(target: View|string): Promise<void> {
         const viewName = target instanceof View ? target.name : target;
-        const view = await this.getCachedView(viewName);
+        const view = await this.getViewOrFail(viewName);
 
         const upQueries: Query[] = [];
         const downQueries: Query[] = [];
@@ -512,7 +512,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
     async renameTable(oldTableOrName: Table|string, newTableName: string): Promise<void> {
         const upQueries: Query[] = [];
         const downQueries: Query[] = [];
-        const oldTable = oldTableOrName instanceof Table ? oldTableOrName : await this.getCachedTable(oldTableOrName);
+        const oldTable = oldTableOrName instanceof Table ? oldTableOrName : await this.getTableOrFail(oldTableOrName);
         const newTable = oldTable.clone();
         const oldTableName = oldTable.name.indexOf(".") === -1 ? oldTable.name : oldTable.name.split(".")[1];
         const schemaName = oldTable.name.indexOf(".") === -1 ? undefined : oldTable.name.split(".")[0];
@@ -605,7 +605,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Creates a new column from the column in the table.
      */
     async addColumn(tableOrName: Table|string, column: TableColumn): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const clonedTable = table.clone();
         const upQueries: Query[] = [];
         const downQueries: Query[] = [];
@@ -682,7 +682,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Renames column in the given table.
      */
     async renameColumn(tableOrName: Table|string, oldTableColumnOrName: TableColumn|string, newTableColumnOrName: TableColumn|string): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const oldColumn = oldTableColumnOrName instanceof TableColumn ? oldTableColumnOrName : table.columns.find(c => c.name === oldTableColumnOrName);
         if (!oldColumn)
             throw new TypeORMError(`Column "${oldTableColumnOrName}" was not found in the "${table.name}" table.`);
@@ -702,7 +702,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Changes a column in the table.
      */
     async changeColumn(tableOrName: Table|string, oldTableColumnOrName: TableColumn|string, newColumn: TableColumn): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         let clonedTable = table.clone();
         const upQueries: Query[] = [];
         const downQueries: Query[] = [];
@@ -1017,7 +1017,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Drops column in the table.
      */
     async dropColumn(tableOrName: Table|string, columnOrName: TableColumn|string): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const column = columnOrName instanceof TableColumn ? columnOrName : table.findColumnByName(columnOrName);
         if (!column)
             throw new TypeORMError(`Column "${columnOrName}" was not found in table "${table.name}"`);
@@ -1103,7 +1103,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Creates a new primary key.
      */
     async createPrimaryKey(tableOrName: Table|string, columnNames: string[]): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const clonedTable = table.clone();
 
         const up = this.createPrimaryKeySql(table, columnNames);
@@ -1123,7 +1123,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Updates composite primary keys.
      */
     async updatePrimaryKeys(tableOrName: Table|string, columns: TableColumn[]): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const clonedTable = table.clone();
         const columnNames = columns.map(column => column.name);
         const upQueries: Query[] = [];
@@ -1156,7 +1156,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Drops a primary key.
      */
     async dropPrimaryKey(tableOrName: Table|string): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const up = this.dropPrimaryKeySql(table);
         const down = this.createPrimaryKeySql(table, table.primaryColumns.map(column => column.name));
         await this.executeQueries(up, down);
@@ -1169,7 +1169,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Creates new unique constraint.
      */
     async createUniqueConstraint(tableOrName: Table|string, uniqueConstraint: TableUnique): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
 
         // new unique constraint may be passed without name. In this case we generate unique name manually.
         if (!uniqueConstraint.name)
@@ -1194,7 +1194,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Drops unique constraint.
      */
     async dropUniqueConstraint(tableOrName: Table|string, uniqueOrName: TableUnique|string): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const uniqueConstraint = uniqueOrName instanceof TableUnique ? uniqueOrName : table.uniques.find(u => u.name === uniqueOrName);
         if (!uniqueConstraint)
             throw new TypeORMError(`Supplied unique constraint was not found in table ${table.name}`);
@@ -1218,7 +1218,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Creates new check constraint.
      */
     async createCheckConstraint(tableOrName: Table|string, checkConstraint: TableCheck): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
 
         // new unique constraint may be passed without name. In this case we generate unique name manually.
         if (!checkConstraint.name)
@@ -1242,7 +1242,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Drops check constraint.
      */
     async dropCheckConstraint(tableOrName: Table|string, checkOrName: TableCheck|string): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const checkConstraint = checkOrName instanceof TableCheck ? checkOrName : table.checks.find(c => c.name === checkOrName);
         if (!checkConstraint)
             throw new TypeORMError(`Supplied check constraint was not found in table ${table.name}`);
@@ -1265,7 +1265,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Creates new exclusion constraint.
      */
     async createExclusionConstraint(tableOrName: Table|string, exclusionConstraint: TableExclusion): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
 
         // new unique constraint may be passed without name. In this case we generate unique name manually.
         if (!exclusionConstraint.name)
@@ -1289,7 +1289,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Drops exclusion constraint.
      */
     async dropExclusionConstraint(tableOrName: Table|string, exclusionOrName: TableExclusion|string): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const exclusionConstraint = exclusionOrName instanceof TableExclusion ? exclusionOrName : table.exclusions.find(c => c.name === exclusionOrName);
         if (!exclusionConstraint)
             throw new TypeORMError(`Supplied exclusion constraint was not found in table ${table.name}`);
@@ -1312,7 +1312,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Creates a new foreign key.
      */
     async createForeignKey(tableOrName: Table|string, foreignKey: TableForeignKey): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
 
         // new FK may be passed without name. In this case we generate FK name manually.
         if (!foreignKey.name)
@@ -1337,7 +1337,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Drops a foreign key from the table.
      */
     async dropForeignKey(tableOrName: Table|string, foreignKeyOrName: TableForeignKey|string): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const foreignKey = foreignKeyOrName instanceof TableForeignKey ? foreignKeyOrName : table.foreignKeys.find(fk => fk.name === foreignKeyOrName);
         if (!foreignKey)
             throw new TypeORMError(`Supplied foreign key was not found in table ${table.name}`);
@@ -1361,7 +1361,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Creates a new index.
      */
     async createIndex(tableOrName: Table|string, index: TableIndex): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
 
         // new index may be passed without name. In this case we generate index name manually.
         if (!index.name)
@@ -1386,7 +1386,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Drops an index from the table.
      */
     async dropIndex(tableOrName: Table|string, indexOrName: TableIndex|string): Promise<void> {
-        const table = tableOrName instanceof Table ? tableOrName : await this.getCachedTable(tableOrName);
+        const table = tableOrName instanceof Table ? tableOrName : await this.getTableOrFail(tableOrName);
         const index = indexOrName instanceof TableIndex ? indexOrName : table.indices.find(i => i.name === indexOrName);
         if (!index)
             throw new TypeORMError(`Supplied index was not found in table ${table.name}`);

@@ -801,6 +801,11 @@ export class EntityMetadata {
 
         this.engine = this.tableMetadataArgs.engine;
         this.database = this.tableMetadataArgs.type === "entity-child" && this.parentEntityMetadata ? this.parentEntityMetadata.database : this.tableMetadataArgs.database;
+
+        if (!this.database) {
+            this.database = this.connection.driver.database;
+        }
+
         if (this.tableMetadataArgs.schema) {
             this.schema = this.tableMetadataArgs.schema;
         }

@@ -57,7 +57,7 @@ export class AuroraDataApiDriver implements Driver {
     options: AuroraDataApiConnectionOptions;
 
     /**
-     * Master database used to perform all write queries.
+     * Database name used to perform all write queries.
      */
     database?: string;
 
@@ -335,6 +335,12 @@ export class AuroraDataApiDriver implements Driver {
      * Performs connection to the database.
      */
     async connect(): Promise<void> {
+        const queryRunner = await this.createQueryRunner("master");
+
+        // Ask the database for where we've connected to
+        this.database = await queryRunner.getCurrentDatabase();
+
+        await queryRunner.release();
     }
 
     /**

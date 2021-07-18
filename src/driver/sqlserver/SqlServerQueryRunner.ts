@@ -2116,8 +2116,8 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
     protected parseTableName(target: Table|View|string, schema?: string) {
         if (target instanceof Table) {
             return {
-                database: target.database,
-                schema: target.schema,
+                database: target.database || this.driver.database,
+                schema: target.schema || this.driver.schema,
                 name: target.name,
             };
         }
@@ -2138,7 +2138,7 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
         } else {
             return {
                 database: this.driver.database,
-                schema: this.driver.options.schema ? this.driver.options.schema : schema || "SCHEMA_NAME()",
+                schema: this.driver.schema ? this.driver.schema : schema || "SCHEMA_NAME()",
                 name: tableName
             };
         }

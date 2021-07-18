@@ -336,7 +336,7 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
 
         // if dropTable called with dropForeignKeys = true, we must create foreign keys in down query.
         const createForeignKeys: boolean = dropForeignKeys;
-        const tablePath = target instanceof Table ? target.path : target;
+        const tablePath = target instanceof Table ? this.getTablePath(target) : target;
         const table = await this.getCachedTable(tablePath);
         const upQueries: Query[] = [];
         const downQueries: Query[] = [];
@@ -390,7 +390,6 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
         const oldTable = oldTableOrName instanceof Table ? oldTableOrName : await this.getCachedTable(oldTableOrName);
         const newTable = oldTable.clone();
 
-        newTable.path = this.driver.buildTableName(newTableName, undefined, newTable.database);
         newTable.name = newTableName;
 
         // rename table
@@ -427,14 +426,14 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
 
             // build queries
             let up = `ALTER TABLE ${this.escapePath(newTable)} DROP FOREIGN KEY \`${foreignKey.name}\`, ADD CONSTRAINT \`${newForeignKeyName}\` FOREIGN KEY (${columnNames}) ` +
-                `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+                `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
             if (foreignKey.onDelete)
                 up += ` ON DELETE ${foreignKey.onDelete}`;
             if (foreignKey.onUpdate)
                 up += ` ON UPDATE ${foreignKey.onUpdate}`;
 
             let down = `ALTER TABLE ${this.escapePath(newTable)} DROP FOREIGN KEY \`${newForeignKeyName}\`, ADD CONSTRAINT \`${foreignKey.name}\` FOREIGN KEY (${columnNames}) ` +
-                `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+                `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
             if (foreignKey.onDelete)
                 down += ` ON DELETE ${foreignKey.onDelete}`;
             if (foreignKey.onUpdate)
@@ -450,7 +449,6 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
         await this.executeQueries(upQueries, downQueries);
 
         // rename old table and replace it in cached tabled;
-        oldTable.path = newTable.path;
         oldTable.name = newTable.name;
         this.replaceCachedTable(oldTable, newTable);
     }
@@ -621,14 +619,14 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
 
                     // build queries
                     let up = `ALTER TABLE ${this.escapePath(table)} DROP FOREIGN KEY \`${foreignKey.name}\`, ADD CONSTRAINT \`${newForeignKeyName}\` FOREIGN KEY (${columnNames}) ` +
-                        `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+                        `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
                     if (foreignKey.onDelete)
                         up += ` ON DELETE ${foreignKey.onDelete}`;
                     if (foreignKey.onUpdate)
                         up += ` ON UPDATE ${foreignKey.onUpdate}`;
 
                     let down = `ALTER TABLE ${this.escapePath(table)} DROP FOREIGN KEY \`${newForeignKeyName}\`, ADD CONSTRAINT \`${foreignKey.name}\` FOREIGN KEY (${columnNames}) ` +
-                        `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+                        `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
                     if (foreignKey.onDelete)
                         down += ` ON DELETE ${foreignKey.onDelete}`;
                     if (foreignKey.onUpdate)
@@ -1274,7 +1272,6 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
 
             // We do not need to join database name, when database is by default.
             table.database = dbTable["TABLE_SCHEMA"];
-            table.path = this.driver.buildTableName(dbTable["TABLE_NAME"], undefined, dbTable["TABLE_SCHEMA"]);
             table.name = dbTable["TABLE_NAME"];
 
             // create columns from the loaded columns
@@ -1296,7 +1293,7 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
                         return nonUnique === 0;
                     });
 
-                    const tableMetadata = this.connection.entityMetadatas.find(metadata => table.path === metadata.tablePath);
+                    const tableMetadata = this.connection.entityMetadatas.find(metadata => this.getTablePath(table) === this.getTablePath(metadata));
                     const hasIgnoredIndex = columnUniqueIndex && tableMetadata && tableMetadata.indices
                         .some(index => index.name === columnUniqueIndex["INDEX_NAME"] && index.synchronize === false);
 
@@ -1504,7 +1501,7 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
                     fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames);
                 const referencedColumnNames = fk.referencedColumnNames.map(columnName => `\`${columnName}\``).join(", ");
 
-                let constraint = `CONSTRAINT \`${fk.name}\` FOREIGN KEY (${columnNames}) REFERENCES ${this.escapePath(fk.referencedTablePath)} (${referencedColumnNames})`;
+                let constraint = `CONSTRAINT \`${fk.name}\` FOREIGN KEY (${columnNames}) REFERENCES ${this.escapePath(this.getTablePath(fk))} (${referencedColumnNames})`;
                 if (fk.onDelete)
                     constraint += ` ON DELETE ${fk.onDelete}`;
                 if (fk.onUpdate)
@@ -1622,7 +1619,7 @@ export class AuroraDataApiQueryRunner extends BaseQueryRunner implements QueryRu
         const columnNames = foreignKey.columnNames.map(column => `\`${column}\``).join(", ");
         const referencedColumnNames = foreignKey.referencedColumnNames.map(column => `\`${column}\``).join(",");
         let sql = `ALTER TABLE ${this.escapePath(table)} ADD CONSTRAINT \`${foreignKey.name}\` FOREIGN KEY (${columnNames}) ` +
-            `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+            `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
         if (foreignKey.onDelete)
             sql += ` ON DELETE ${foreignKey.onDelete}`;
         if (foreignKey.onUpdate)

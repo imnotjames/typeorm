@@ -329,7 +329,6 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
         const oldTable = oldTableOrName instanceof Table ? oldTableOrName : await this.getCachedTable(oldTableOrName);
         const newTable = oldTable.clone();
 
-        newTable.path = newTableName;
         newTable.name = newTableName;
 
         // rename table
@@ -338,7 +337,6 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
         await this.executeQueries(up, down);
 
         // rename old table;
-        oldTable.path = newTable.path;
         oldTable.name = newTable.name;
 
         // rename unique constraints
@@ -348,7 +346,7 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
 
         // rename foreign key constraints
         newTable.foreignKeys.forEach(foreignKey => {
-            foreignKey.name = this.connection.namingStrategy.foreignKeyName(newTable, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+            foreignKey.name = this.connection.namingStrategy.foreignKeyName(newTable, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
         });
 
         // rename indices
@@ -428,7 +426,7 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
                 changedTable.findColumnForeignKeys(changedColumnSet.oldColumn).forEach(fk => {
                     fk.columnNames.splice(fk.columnNames.indexOf(changedColumnSet.oldColumn.name), 1);
                     fk.columnNames.push(changedColumnSet.newColumn.name);
-                    fk.name = this.connection.namingStrategy.foreignKeyName(changedTable, fk.columnNames, fk.referencedTablePath, fk.referencedColumnNames);
+                    fk.name = this.connection.namingStrategy.foreignKeyName(changedTable, fk.columnNames, this.getTablePath(fk), fk.referencedColumnNames);
                 });
 
                 changedTable.findColumnIndices(changedColumnSet.oldColumn).forEach(index => {
@@ -830,7 +828,6 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
         return Promise.all(dbTables.map(async dbTable => {
             const table = new Table();
 
-            table.path = dbTable["name"];
             table.name = dbTable["name"];
 
             const sql = dbTable["sql"];
@@ -1068,7 +1065,7 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
             const foreignKeysSql = table.foreignKeys.map(fk => {
                 const columnNames = fk.columnNames.map(columnName => `"${columnName}"`).join(", ");
                 if (!fk.name)
-                    fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames, fk.referencedTablePath, fk.referencedColumnNames);
+                    fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames, this.getTablePath(fk), fk.referencedColumnNames);
                 const referencedColumnNames = fk.referencedColumnNames.map(columnName => `"${columnName}"`).join(", ");
 
                 let constraint = `CONSTRAINT "${fk.name}" FOREIGN KEY (${columnNames}) REFERENCES "${fk.referencedTableName}" (${referencedColumnNames})`;
@@ -1090,7 +1087,7 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
 
         sql += `)`;
 
-        const tableMetadata = this.connection.entityMetadatas.find(metadata => table.path === metadata.tablePath);
+        const tableMetadata = this.connection.entityMetadatas.find(metadata => this.getTablePath(table) === this.getTablePath(metadata));
         if (tableMetadata && tableMetadata.withoutRowid) {
             sql += " WITHOUT ROWID";
         }
@@ -1203,7 +1200,6 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
         });
 
         // change table name into 'temporary_table'
-        newTable.path = "temporary_" + newTable.path;
         newTable.name = "temporary_" + newTable.name;
 
         // create new table
@@ -1237,7 +1233,6 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
         upQueries.push(new Query(`ALTER TABLE "${newTable.name}" RENAME TO "${oldTable.name}"`));
         downQueries.push(new Query(`ALTER TABLE "${oldTable.name}" RENAME TO "${newTable.name}"`));
 
-        newTable.path = oldTable.path;
         newTable.name = oldTable.name;
 
         // recreate table indices

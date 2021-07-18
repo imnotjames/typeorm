@@ -185,18 +185,31 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         await this.createViews();
     }
 
-    private getTablePath(target: EntityMetadata | Table): string {
+    private getTablePath(target: EntityMetadata | Table | TableForeignKey): string {
         if (target instanceof Table) {
+            if (target.name.includes(".")) {
+                return target.name;
+            }
+
             const database = target.database ? target.database : this.connection.driver.database;
-            const schema = target.schema ? target.schema : this.connection.driver.schema
+            const schema = target.schema ? target.schema : this.connection.driver.schema;
             return this.connection.driver.buildTableName(target.name, schema, database);
+        }
+
+        if (target instanceof TableForeignKey) {
+            if (target.referencedTableName.includes(".")) {
+                return target.referencedTableName;
+            }
+
+            const database = target.referencedDatabase ? target.referencedDatabase : this.connection.driver.database;
+            const schema = target.referencedSchema ? target.referencedSchema : this.connection.driver.schema;
+            return this.connection.driver.buildTableName(target.referencedTableName, schema, database);
         }
 
         const database = target.database ? target.database : this.connection.driver.database;
         const schema = target.schema ? target.schema : this.connection.driver.schema;
         return this.connection.driver.buildTableName(target.tableName, schema, database);
     }
-
 
     /**
      * Drops all (old) foreign keys that exist in the tables, but do not exist in the entity metadata.
@@ -211,7 +224,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             const tableForeignKeysToDrop = table.foreignKeys.filter(tableForeignKey => {
                 const metadataFK = metadata.foreignKeys.find(metadataForeignKey => (
                     (tableForeignKey.name === metadataForeignKey.name) &&
-                    (tableForeignKey.referencedTablePath === this.getTablePath(metadataForeignKey.referencedEntityMetadata))
+                    (this.getTablePath(tableForeignKey) === this.getTablePath(metadataForeignKey.referencedEntityMetadata))
                 ));
                 return !metadataFK
                     || (metadataFK.onDelete && metadataFK.onDelete !== tableForeignKey.onDelete)
@@ -678,7 +691,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                 .filter(foreignKey => {
                 return !table.foreignKeys.find(dbForeignKey => (
                     (dbForeignKey.name === foreignKey.name) &&
-                    (dbForeignKey.referencedTablePath === this.getTablePath(foreignKey.referencedEntityMetadata))
+                    (this.getTablePath(dbForeignKey) === this.getTablePath(foreignKey.referencedEntityMetadata))
                 ));
             });
             if (newKeys.length === 0)
@@ -709,7 +722,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
 
         for (const loadedTable of this.queryRunner.loadedTables) {
             const dependForeignKeys = loadedTable.foreignKeys.filter(foreignKey => {
-                return foreignKey.referencedTablePath === tablePath && foreignKey.referencedColumnNames.indexOf(columnName) !== -1;
+                return this.getTablePath(foreignKey) === tablePath && foreignKey.referencedColumnNames.indexOf(columnName) !== -1;
             });
 
             if (dependForeignKeys.length > 0) {

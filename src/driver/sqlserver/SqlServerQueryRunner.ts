@@ -580,10 +580,6 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
         let newTable = oldTable.clone();
 
         // we need database name and schema name to rename FK constraints
-        let dbName: string|undefined = undefined;
-        let schemaName: string|undefined = undefined;
-
-        newTable.path = this.driver.buildTableName(newTableName, newTable.schema, newTable.database);
         newTable.name = newTableName;
 
         // if we have tables with database which differs from database specified in config, we must change currently used database.
@@ -639,11 +635,11 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
         // rename foreign key constraints
         newTable.foreignKeys.forEach(foreignKey => {
             // build new constraint name
-            const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(newTable, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+            const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(newTable, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
             // build queries
             upQueries.push(new Query(`EXEC sp_rename "${this.buildForeignKeyName(foreignKey.name!, oldTable.schema, oldTable.database)}", "${newForeignKeyName}"`));
-            downQueries.push(new Query(`EXEC sp_rename "${this.buildForeignKeyName(newForeignKeyName, schemaName, dbName)}", "${foreignKey.name}"`));
+            downQueries.push(new Query(`EXEC sp_rename "${this.buildForeignKeyName(newForeignKeyName, newTable.schema, newTable.database)}", "${foreignKey.name}"`));
 
             // replace constraint name
             foreignKey.name = newForeignKeyName;
@@ -658,7 +654,6 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
         await this.executeQueries(upQueries, downQueries);
 
         // rename old table and replace it in cached tabled;
-        oldTable.path = newTable.path;
         oldTable.name = newTable.name;
         this.replaceCachedTable(oldTable, newTable);
     }
@@ -829,7 +824,7 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
                     // build new constraint name
                     foreignKey.columnNames.splice(foreignKey.columnNames.indexOf(oldColumn.name), 1);
                     foreignKey.columnNames.push(newColumn.name);
-                    const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(clonedTable, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+                    const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(clonedTable, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
                     // build queries
                     upQueries.push(new Query(`EXEC sp_rename "${this.buildForeignKeyName(foreignKey.name!, table.schema, table.database)}", "${newForeignKeyName}"`));
@@ -1269,7 +1264,7 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
 
         // new FK may be passed without name. In this case we generate FK name manually.
         if (!foreignKey.name)
-            foreignKey.name = this.connection.namingStrategy.foreignKeyName(table, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+            foreignKey.name = this.connection.namingStrategy.foreignKeyName(table, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
         const up = this.createForeignKeySql(table, foreignKey);
         const down = this.dropForeignKeySql(table, foreignKey);
@@ -1659,7 +1654,6 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
 
             table.database = dbTable["TABLE_CATALOG"];
             table.schema = dbTable["TABLE_SCHEMA"];
-            table.path = this.driver.buildTableName(dbTable["TABLE_NAME"], dbTable["TABLE_SCHEMA"], dbTable["TABLE_CATALOG"]);
             table.name = dbTable["TABLE_NAME"];
 
             const defaultCollation = dbCollations.find(dbCollation => dbCollation["NAME"] === dbTable["TABLE_CATALOG"])!;
@@ -1895,10 +1889,10 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
             const foreignKeysSql = table.foreignKeys.map(fk => {
                 const columnNames = fk.columnNames.map(columnName => `"${columnName}"`).join(", ");
                 if (!fk.name)
-                    fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames, fk.referencedTablePath, fk.referencedColumnNames);
+                    fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames, this.getTablePath(fk), fk.referencedColumnNames);
                 const referencedColumnNames = fk.referencedColumnNames.map(columnName => `"${columnName}"`).join(", ");
 
-                let constraint = `CONSTRAINT "${fk.name}" FOREIGN KEY (${columnNames}) REFERENCES ${this.escapePath(fk.referencedTablePath)} (${referencedColumnNames})`;
+                let constraint = `CONSTRAINT "${fk.name}" FOREIGN KEY (${columnNames}) REFERENCES ${this.escapePath(this.getTablePath(fk))} (${referencedColumnNames})`;
                 if (fk.onDelete)
                     constraint += ` ON DELETE ${fk.onDelete}`;
                 if (fk.onUpdate)
@@ -2049,7 +2043,7 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
         const columnNames = foreignKey.columnNames.map(column => `"` + column + `"`).join(", ");
         const referencedColumnNames = foreignKey.referencedColumnNames.map(column => `"` + column + `"`).join(",");
         let sql = `ALTER TABLE ${this.escapePath(table)} ADD CONSTRAINT "${foreignKey.name}" FOREIGN KEY (${columnNames}) ` +
-            `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+            `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
         if (foreignKey.onDelete)
             sql += ` ON DELETE ${foreignKey.onDelete}`;
         if (foreignKey.onUpdate)

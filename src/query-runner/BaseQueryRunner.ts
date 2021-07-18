@@ -10,6 +10,8 @@ import {TableColumn} from "../schema-builder/table/TableColumn";
 import {Broadcaster} from "../subscriber/Broadcaster";
 import {ReplicationMode} from "../driver/types/ReplicationMode";
 import { TypeORMError } from "../error/TypeORMError";
+import { EntityMetadata } from "../metadata/EntityMetadata";
+import { TableForeignKey } from "../schema-builder/table/TableForeignKey";
 
 export abstract class BaseQueryRunner {
 
@@ -225,7 +227,7 @@ export abstract class BaseQueryRunner {
     protected async getCachedTable(tableName: string): Promise<Table> {
         if (tableName in this.cachedTablePaths) {
             const tablePath = this.cachedTablePaths[tableName];
-            const table = this.loadedTables.find(table => table.path === tablePath);
+            const table = this.loadedTables.find(table => this.getTablePath(table) === tablePath);
 
             if (table) {
                 return table;
@@ -235,7 +237,7 @@ export abstract class BaseQueryRunner {
         const foundTables = await this.loadTables([tableName]);
 
         if (foundTables.length > 0) {
-            this.cachedTablePaths[tableName] = foundTables[0].path;
+            this.cachedTablePaths[tableName] = this.getTablePath(foundTables[0]);
             this.loadedTables.push(foundTables[0]);
             return foundTables[0];
         } else {
@@ -247,19 +249,19 @@ export abstract class BaseQueryRunner {
      * Replaces loaded table with given changed table.
      */
     protected replaceCachedTable(table: Table, changedTable: Table): void {
-        const foundTable = this.loadedTables.find(loadedTable => loadedTable.path === table.path);
+        const oldTablePath = this.getTablePath(table);
+        const foundTable = this.loadedTables.find(loadedTable => this.getTablePath(loadedTable) === oldTablePath);
 
         // Clean up the lookup cache..
         for (const [key, cachedPath] of Object.entries(this.cachedTablePaths)) {
-            if (cachedPath === table.path) {
-                this.cachedTablePaths[key] = changedTable.path;
+            if (cachedPath === oldTablePath) {
+                this.cachedTablePaths[key] = this.getTablePath(changedTable);
             }
         }
 
         if (foundTable) {
             foundTable.database = changedTable.database;
             foundTable.schema = changedTable.schema;
-            foundTable.path = changedTable.path;
             foundTable.name = changedTable.name;
             foundTable.columns = changedTable.columns;
             foundTable.indices = changedTable.indices;
@@ -269,6 +271,32 @@ export abstract class BaseQueryRunner {
             foundTable.justCreated = changedTable.justCreated;
             foundTable.engine = changedTable.engine;
         }
+    }
+
+    protected getTablePath(target: EntityMetadata | Table | TableForeignKey): string {
+        if (target instanceof Table) {
+            if (target.name.includes(".")) {
+                return target.name;
+            }
+
+            const database = target.database ? target.database : this.connection.driver.database;
+            const schema = target.schema ? target.schema : this.connection.driver.schema
+            return this.connection.driver.buildTableName(target.name, schema, database);
+        }
+
+        if (target instanceof TableForeignKey) {
+            if (target.referencedTableName.includes(".")) {
+                return target.referencedTableName;
+            }
+
+            const database = target.referencedDatabase ? target.referencedDatabase : this.connection.driver.database;
+            const schema = target.referencedSchema ? target.referencedSchema : this.connection.driver.schema;
+            return this.connection.driver.buildTableName(target.referencedTableName, schema, database);
+        }
+
+        const database = target.database ? target.database : this.connection.driver.database;
+        const schema = target.schema ? target.schema : this.connection.driver.schema;
+        return this.connection.driver.buildTableName(target.tableName, schema, database);
     }
 
     protected getTypeormMetadataTableName(): string {

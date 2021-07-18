@@ -38,6 +38,8 @@ export class TableForeignKey {
 
     /**
      * Table referenced in the foreign key.
+     *
+     * @deprecated
      */
     referencedTablePath: string;
 
@@ -75,7 +77,6 @@ export class TableForeignKey {
         this.referencedDatabase = options.referencedDatabase;
         this.referencedSchema = options.referencedSchema;
         this.referencedTableName = options.referencedTableName;
-        this.referencedTablePath = options.referencedTablePath || options.referencedTableName;
         this.onDelete = options.onDelete;
         this.onUpdate = options.onUpdate;
         this.deferrable = options.deferrable;
@@ -96,7 +97,6 @@ export class TableForeignKey {
             referencedDatabase: this.referencedDatabase,
             referencedSchema: this.referencedSchema,
             referencedTableName: this.referencedTableName,
-            referencedTablePath: this.referencedTablePath,
             onDelete: this.onDelete,
             onUpdate: this.onUpdate,
             deferrable: this.deferrable,

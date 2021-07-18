@@ -439,7 +439,6 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
         const oldTable = oldTableOrName instanceof Table ? oldTableOrName : await this.getCachedTable(oldTableOrName);
         const newTable = oldTable.clone();
 
-        newTable.path = this.driver.buildTableName(newTableName, newTable.schema, newTable.database);
         newTable.name = newTableName;
 
         // rename table
@@ -474,18 +473,18 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
             // build new constraint name
             const columnNames = foreignKey.columnNames.map(column => `\`${column}\``).join(", ");
             const referencedColumnNames = foreignKey.referencedColumnNames.map(column => `\`${column}\``).join(",");
-            const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(newTable, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+            const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(newTable, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
             // build queries
             let up = `ALTER TABLE ${this.escapePath(newTable)} DROP FOREIGN KEY \`${foreignKey.name}\`, ADD CONSTRAINT \`${newForeignKeyName}\` FOREIGN KEY (${columnNames}) ` +
-                `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+                `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
             if (foreignKey.onDelete)
                 up += ` ON DELETE ${foreignKey.onDelete}`;
             if (foreignKey.onUpdate)
                 up += ` ON UPDATE ${foreignKey.onUpdate}`;
 
             let down = `ALTER TABLE ${this.escapePath(newTable)} DROP FOREIGN KEY \`${newForeignKeyName}\`, ADD CONSTRAINT \`${foreignKey.name}\` FOREIGN KEY (${columnNames}) ` +
-                `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+                `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
             if (foreignKey.onDelete)
                 down += ` ON DELETE ${foreignKey.onDelete}`;
             if (foreignKey.onUpdate)
@@ -501,7 +500,6 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
         await this.executeQueries(upQueries, downQueries);
 
         // rename old table and replace it in cached tabled;
-        oldTable.path = newTable.path;
         oldTable.name = newTable.name;
         this.replaceCachedTable(oldTable, newTable);
     }
@@ -670,18 +668,18 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
                     foreignKey.columnNames.push(newColumn.name);
                     const columnNames = foreignKey.columnNames.map(column => `\`${column}\``).join(", ");
                     const referencedColumnNames = foreignKey.referencedColumnNames.map(column => `\`${column}\``).join(",");
-                    const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(clonedTable, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+                    const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(clonedTable, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
                     // build queries
                     let up = `ALTER TABLE ${this.escapePath(table)} DROP FOREIGN KEY \`${foreignKey.name}\`, ADD CONSTRAINT \`${newForeignKeyName}\` FOREIGN KEY (${columnNames}) ` +
-                        `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+                        `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
                     if (foreignKey.onDelete)
                         up += ` ON DELETE ${foreignKey.onDelete}`;
                     if (foreignKey.onUpdate)
                         up += ` ON UPDATE ${foreignKey.onUpdate}`;
 
                     let down = `ALTER TABLE ${this.escapePath(table)} DROP FOREIGN KEY \`${newForeignKeyName}\`, ADD CONSTRAINT \`${foreignKey.name}\` FOREIGN KEY (${columnNames}) ` +
-                        `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+                        `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
                     if (foreignKey.onDelete)
                         down += ` ON DELETE ${foreignKey.onDelete}`;
                     if (foreignKey.onUpdate)
@@ -1079,7 +1077,7 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
 
         // new FK may be passed without name. In this case we generate FK name manually.
         if (!foreignKey.name)
-            foreignKey.name = this.connection.namingStrategy.foreignKeyName(table, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+            foreignKey.name = this.connection.namingStrategy.foreignKeyName(table, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
         const up = this.createForeignKeySql(table, foreignKey);
         const down = this.dropForeignKeySql(table, foreignKey);
@@ -1450,7 +1448,6 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
 
             // We do not need to join database name, when database is by default.
             table.database = dbTable["TABLE_SCHEMA"];
-            table.path = this.driver.buildTableName(dbTable["TABLE_NAME"], undefined, dbTable["TABLE_SCHEMA"]);
             table.name = dbTable["TABLE_NAME"];
 
             // create columns from the loaded columns
@@ -1472,7 +1469,7 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
                         return nonUnique === 0;
                     });
 
-                    const tableMetadata = this.connection.entityMetadatas.find(metadata => table.path === metadata.tablePath);
+                    const tableMetadata = this.connection.entityMetadatas.find(metadata => this.getTablePath(table) === this.getTablePath(metadata));
                     const hasIgnoredIndex = columnUniqueIndex && tableMetadata && tableMetadata.indices
                         .some(index => index.name === columnUniqueIndex["INDEX_NAME"] && index.synchronize === false);
 
@@ -1684,10 +1681,10 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
             const foreignKeysSql = table.foreignKeys.map(fk => {
                 const columnNames = fk.columnNames.map(columnName => `\`${columnName}\``).join(", ");
                 if (!fk.name)
-                    fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames, fk.referencedTablePath, fk.referencedColumnNames);
+                    fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames, this.getTablePath(fk), fk.referencedColumnNames);
                 const referencedColumnNames = fk.referencedColumnNames.map(columnName => `\`${columnName}\``).join(", ");
 
-                let constraint = `CONSTRAINT \`${fk.name}\` FOREIGN KEY (${columnNames}) REFERENCES ${this.escapePath(fk.referencedTablePath)} (${referencedColumnNames})`;
+                let constraint = `CONSTRAINT \`${fk.name}\` FOREIGN KEY (${columnNames}) REFERENCES ${this.escapePath(this.getTablePath(fk))} (${referencedColumnNames})`;
                 if (fk.onDelete)
                     constraint += ` ON DELETE ${fk.onDelete}`;
                 if (fk.onUpdate)
@@ -1807,7 +1804,7 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
         const columnNames = foreignKey.columnNames.map(column => `\`${column}\``).join(", ");
         const referencedColumnNames = foreignKey.referencedColumnNames.map(column => `\`${column}\``).join(",");
         let sql = `ALTER TABLE ${this.escapePath(table)} ADD CONSTRAINT \`${foreignKey.name}\` FOREIGN KEY (${columnNames}) ` +
-            `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+            `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
         if (foreignKey.onDelete)
             sql += ` ON DELETE ${foreignKey.onDelete}`;
         if (foreignKey.onUpdate)

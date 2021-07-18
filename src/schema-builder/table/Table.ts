@@ -29,15 +29,15 @@ export class Table {
     schema?: string;
 
     /**
-     * May contain database name, schema name and table name, unless they're the current database.
-     *
-     * E.g. myDB.mySchema.myTable
+     * Object name of this table.
      */
     name: string;
 
     /**
      * Contains database name, schema name and table name.
      * E.g. myDB.mySchema.myTable
+     *
+     * @deprecated
      */
     path: string;
 
@@ -93,8 +93,6 @@ export class Table {
 
             this.schema = options.schema;
 
-            this.path = options.path || options.name;
-
             if (options.name.indexOf(".") !== -1) {
                 this.name = options.name.split(".").pop()!;
             } else {
@@ -145,7 +143,6 @@ export class Table {
         return new Table({
             schema: this.schema,
             database: this.database,
-            path: this.path,
             name: this.name,
             columns: this.columns.map(column => column.clone()),
             indices: this.indices.map(constraint => constraint.clone()),
@@ -338,7 +335,6 @@ export class Table {
         const options: TableOptions = {
             database,
             schema,
-            path: driver.buildTableName(entityMetadata.tableName, schema, database),
             name: entityMetadata.tableName,
             engine: entityMetadata.engine,
             columns: entityMetadata.columns

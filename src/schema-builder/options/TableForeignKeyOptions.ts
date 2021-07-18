@@ -34,6 +34,8 @@ export interface TableForeignKeyOptions {
 
     /**
      * Table path referenced in the foreign key.
+     *
+     * @deprecated
      */
     referencedTablePath?: string;
 

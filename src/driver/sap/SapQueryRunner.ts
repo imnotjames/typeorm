@@ -481,7 +481,6 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
         const oldTable = oldTableOrName instanceof Table ? oldTableOrName : await this.getCachedTable(oldTableOrName);
         const newTable = oldTable.clone();
 
-        newTable.path = this.driver.buildTableName(newTableName, newTable.schema);
         newTable.name = newTableName;
 
         // rename table
@@ -510,8 +509,7 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                     columnNames: foreignKeys.map(dbFk => dbFk["COLUMN_NAME"]),
                     referencedDatabase: newTable.database,
                     referencedSchema: newTable.schema,
-                    referencedTableName: newTable.name, // we use renamed table name
-                    referencedTablePath: newTable.path,
+                    referencedTableName: newTable.name,
                     referencedColumnNames: foreignKeys.map(dbFk => dbFk["REFERENCED_COLUMN_NAME"]),
                     onDelete: dbForeignKey["DELETE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["DELETE_RULE"],
                     onUpdate: dbForeignKey["UPDATE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["UPDATE_RULE"],
@@ -546,7 +544,7 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
         // recreate foreign keys with new constraint names
         newTable.foreignKeys.forEach(foreignKey => {
             // replace constraint name
-            foreignKey.name = this.connection.namingStrategy.foreignKeyName(newTable, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+            foreignKey.name = this.connection.namingStrategy.foreignKeyName(newTable, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
             // create new FK's
             upQueries.push(this.createForeignKeySql(newTable, foreignKey));
@@ -580,7 +578,6 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
         await this.executeQueries(upQueries, downQueries);
 
         // rename old table and replace it in cached tabled;
-        oldTable.path = newTable.path;
         oldTable.name = newTable.name;
         this.replaceCachedTable(oldTable, newTable);
     }
@@ -620,7 +617,6 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                             referencedDatabase: table.database,
                             referencedSchema: table.schema,
                             referencedTableName: table.name,
-                            referencedTablePath: table.path,
                             referencedColumnNames: foreignKeys.map(dbFk => dbFk["REFERENCED_COLUMN_NAME"]),
                             onDelete: dbForeignKey["DELETE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["DELETE_RULE"],
                             onUpdate: dbForeignKey["UPDATE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["UPDATE_RULE"],
@@ -790,7 +786,7 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                     // build new constraint name
                     foreignKey.columnNames.splice(foreignKey.columnNames.indexOf(oldColumn.name), 1);
                     foreignKey.columnNames.push(newColumn.name);
-                    const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(clonedTable, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+                    const newForeignKeyName = this.connection.namingStrategy.foreignKeyName(clonedTable, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
                     upQueries.push(this.dropForeignKeySql(clonedTable, foreignKey));
                     downQueries.push(this.createForeignKeySql(clonedTable, foreignKey));
@@ -1099,7 +1095,6 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                     referencedDatabase: table.database,
                     referencedSchema: table.schema,
                     referencedTableName: table.name,
-                    referencedTablePath: table.path,
                     referencedColumnNames: foreignKeys.map(dbFk => dbFk["REFERENCED_COLUMN_NAME"]),
                     onDelete: dbForeignKey["DELETE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["DELETE_RULE"],
                     onUpdate: dbForeignKey["UPDATE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["UPDATE_RULE"],
@@ -1170,7 +1165,6 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                     referencedDatabase: table.database,
                     referencedSchema: table.schema,
                     referencedTableName: table.name,
-                    referencedTablePath: table.path,
                     referencedColumnNames: foreignKeys.map(dbFk => dbFk["REFERENCED_COLUMN_NAME"]),
                     onDelete: dbForeignKey["DELETE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["DELETE_RULE"],
                     onUpdate: dbForeignKey["UPDATE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["UPDATE_RULE"],
@@ -1312,7 +1306,7 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
 
         // new FK may be passed without name. In this case we generate FK name manually.
         if (!foreignKey.name)
-            foreignKey.name = this.connection.namingStrategy.foreignKeyName(table, foreignKey.columnNames, foreignKey.referencedTablePath, foreignKey.referencedColumnNames);
+            foreignKey.name = this.connection.namingStrategy.foreignKeyName(table, foreignKey.columnNames, this.getTablePath(foreignKey), foreignKey.referencedColumnNames);
 
         const up = this.createForeignKeySql(table, foreignKey);
         const down = this.dropForeignKeySql(table, foreignKey);
@@ -1553,7 +1547,6 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
 
             table.database = currentDatabase;
             table.schema = dbTable["SCHEMA_NAME"];
-            table.path = this.driver.buildTableName(dbTable["TABLE_NAME"], dbTable["SCHEMA_NAME"])
             table.name = dbTable["TABLE_NAME"];
 
             // create columns from the loaded columns
@@ -1580,7 +1573,7 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                         return dbIndex["CONSTRAINT"] && dbIndex["CONSTRAINT"].indexOf("UNIQUE") !== -1;
                     });
 
-                    const tableMetadata = this.connection.entityMetadatas.find(metadata => table.path === metadata.tablePath);
+                    const tableMetadata = this.connection.entityMetadatas.find(metadata => this.getTablePath(table) === this.getTablePath(metadata));
                     const hasIgnoredIndex = columnUniqueIndex && tableMetadata && tableMetadata.indices
                         .some(index => index.name === columnUniqueIndex["INDEX_NAME"] && index.synchronize === false);
 
@@ -1765,10 +1758,10 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
             const foreignKeysSql = table.foreignKeys.map(fk => {
                 const columnNames = fk.columnNames.map(columnName => `"${columnName}"`).join(", ");
                 if (!fk.name)
-                    fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames, fk.referencedTablePath, fk.referencedColumnNames);
+                    fk.name = this.connection.namingStrategy.foreignKeyName(table, fk.columnNames, this.getTablePath(fk), fk.referencedColumnNames);
                 const referencedColumnNames = fk.referencedColumnNames.map(columnName => `"${columnName}"`).join(", ");
 
-                let constraint = `CONSTRAINT "${fk.name}" FOREIGN KEY (${columnNames}) REFERENCES ${this.escapePath(fk.referencedTablePath)} (${referencedColumnNames})`;
+                let constraint = `CONSTRAINT "${fk.name}" FOREIGN KEY (${columnNames}) REFERENCES ${this.escapePath(this.getTablePath(fk))} (${referencedColumnNames})`;
                 // SAP HANA does not have "NO ACTION" option for FK's
                 if (fk.onDelete) {
                     const onDelete = fk.onDelete === "NO ACTION" ? "RESTRICT" : fk.onDelete;
@@ -1942,7 +1935,7 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
         const columnNames = foreignKey.columnNames.map(column => `"` + column + `"`).join(", ");
         const referencedColumnNames = foreignKey.referencedColumnNames.map(column => `"` + column + `"`).join(",");
         let sql = `ALTER TABLE ${this.escapePath(tableOrName)} ADD CONSTRAINT "${foreignKey.name}" FOREIGN KEY (${columnNames}) ` +
-            `REFERENCES ${this.escapePath(foreignKey.referencedTablePath)}(${referencedColumnNames})`;
+            `REFERENCES ${this.escapePath(this.getTablePath(foreignKey))}(${referencedColumnNames})`;
 
         // SAP HANA does not have "NO ACTION" option for FK's
         if (foreignKey.onDelete) {

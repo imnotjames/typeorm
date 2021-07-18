@@ -186,7 +186,6 @@ describe("query runner > rename table", () => {
         await queryRunner.createTable(new Table({
             database: questionTableDatabase,
             schema: questionTableSchema,
-            path: questionTablePath,
             name: questionTableName,
             columns: [
                 {
@@ -207,7 +206,6 @@ describe("query runner > rename table", () => {
         await queryRunner.createTable(new Table({
             database: categoryTableDatabase,
             schema: categoryTableSchema,
-            path: categoryTablePath,
             name: categoryTableName,
             columns: [
                 {
@@ -241,17 +239,17 @@ describe("query runner > rename table", () => {
         const newIndexName = connection.namingStrategy.indexName(table!, ["name"]);
         table!.indices[0].name!.should.be.equal(newIndexName);
 
-        await queryRunner.renameTable(categoryTableName, "renamedCategory");
+        await queryRunner.renameTable(categoryTablePath, "renamedCategory");
         table = await queryRunner.getTable(renamedCategoryTablePath);
         const newForeignKeyName = connection.namingStrategy.foreignKeyName(table!, ["questionId"], "question", ["id"]);
         table!.foreignKeys[0].name!.should.be.equal(newForeignKeyName);
 
         await queryRunner.executeMemoryDownSql();
 
-        table = await queryRunner.getTable(questionTableName);
+        table = await queryRunner.getTable(questionTablePath);
         table!.should.be.exist;
 
-        table = await queryRunner.getTable(categoryTableName);
+        table = await queryRunner.getTable(categoryTablePath);
         table!.should.be.exist;
 
         await queryRunner.release();

@@ -1445,15 +1445,12 @@ export class OracleQueryRunner extends BaseQueryRunner implements QueryRunner {
                     dbFk["CONSTRAINT_NAME"] === dbForeignKey["CONSTRAINT_NAME"]
                 ));
 
-                const referencedTablePath = this.driver.buildTableName(dbForeignKey["REFERENCED_TABLE_NAME"], dbForeignKey["OWNER"], table.database);
-
                 return new TableForeignKey({
                     name: dbForeignKey["CONSTRAINT_NAME"],
                     columnNames: foreignKeys.map(dbFk => dbFk["COLUMN_NAME"]),
                     referencedDatabase: table.database,
                     referencedSchema: dbForeignKey["OWNER"],
                     referencedTableName: dbForeignKey["REFERENCED_TABLE_NAME"],
-                    referencedTablePath: referencedTablePath,
                     referencedColumnNames: foreignKeys.map(dbFk => dbFk["REFERENCED_COLUMN_NAME"]),
                     onDelete: dbForeignKey["ON_DELETE"],
                     onUpdate: "NO ACTION", // Oracle does not have onUpdate option in FK's, but we need it for proper synchronization

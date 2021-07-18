@@ -34,14 +34,6 @@ export class Table {
     name: string;
 
     /**
-     * Contains database name, schema name and table name.
-     * E.g. myDB.mySchema.myTable
-     *
-     * @deprecated
-     */
-    path: string;
-
-    /**
      * Table columns.
      */
     columns: TableColumn[] = [];
@@ -93,11 +85,7 @@ export class Table {
 
             this.schema = options.schema;
 
-            if (options.name.indexOf(".") !== -1) {
-                this.name = options.name.split(".").pop()!;
-            } else {
-                this.name = options.name;
-            }
+            this.name = options.name;
 
             if (options.columns)
                 this.columns = options.columns.map(column => new TableColumn(column));
@@ -331,11 +319,12 @@ export class Table {
     static create(entityMetadata: EntityMetadata, driver: Driver): Table {
         const database = entityMetadata.database || driver.database;
         const schema = entityMetadata.schema || driver.schema;
+        const name = entityMetadata.name.split(".").pop()!;
 
         const options: TableOptions = {
             database,
             schema,
-            name: entityMetadata.tableName,
+            name,
             engine: entityMetadata.engine,
             columns: entityMetadata.columns
                 .filter(column => column)

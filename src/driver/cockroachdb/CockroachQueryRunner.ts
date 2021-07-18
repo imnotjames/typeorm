@@ -1648,14 +1648,11 @@ export class CockroachQueryRunner extends BaseQueryRunner implements QueryRunner
             table.foreignKeys = tableForeignKeyConstraints.map(dbForeignKey => {
                 const foreignKeys = dbForeignKeys.filter(dbFk => dbFk["constraint_name"] === dbForeignKey["constraint_name"]);
 
-                const referencedTablePath = this.driver.buildTableName(dbForeignKey["referenced_table_name"], dbForeignKey["referenced_table_schema"]);
-
                 return new TableForeignKey({
                     name: dbForeignKey["constraint_name"],
                     columnNames: foreignKeys.map(dbFk => dbFk["column_name"]),
                     referencedSchema: dbForeignKey["referenced_table_schema"],
                     referencedTableName: dbForeignKey["referenced_table_name"],
-                    referencedTablePath: referencedTablePath,
                     referencedColumnNames: foreignKeys.map(dbFk => dbFk["referenced_column_name"]),
                     onDelete: dbForeignKey["on_delete"],
                     onUpdate: dbForeignKey["on_update"]

@@ -37,13 +37,6 @@ export class TableForeignKey {
     referencedTableName: string;
 
     /**
-     * Table referenced in the foreign key.
-     *
-     * @deprecated
-     */
-    referencedTablePath: string;
-
-    /**
      * Column names which included by this foreign key.
      */
     referencedColumnNames: string[] = [];

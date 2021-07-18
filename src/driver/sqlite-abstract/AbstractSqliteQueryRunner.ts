@@ -926,7 +926,6 @@ export abstract class AbstractSqliteQueryRunner extends BaseQueryRunner implemen
                     name: fkName,
                     columnNames: columnNames,
                     referencedTableName: foreignKey["table"],
-                    referencedTablePath: foreignKey["table"],
                     referencedColumnNames: referencedColumnNames,
                     onDelete: foreignKey["on_delete"],
                     onUpdate: foreignKey["on_update"]

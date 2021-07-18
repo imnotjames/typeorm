@@ -280,7 +280,7 @@ export abstract class BaseQueryRunner {
             }
 
             const database = target.database ? target.database : this.connection.driver.database;
-            const schema = target.schema ? target.schema : this.connection.driver.schema
+            const schema = target.schema ? target.schema : this.connection.driver.schema;
             return this.connection.driver.buildTableName(target.name, schema, database);
         }
 

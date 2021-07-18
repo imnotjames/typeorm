@@ -2019,7 +2019,7 @@ export class CockroachQueryRunner extends BaseQueryRunner implements QueryRunner
 
         if (column.isGenerated) {
             if (column.generationStrategy === "increment") {
-                c += ` INT DEFAULT nextval('${this.buildSequenceName(table, column)}')`;
+                c += ` INT DEFAULT nextval('${this.escapePath(this.buildSequenceName(table, column))}')`;
 
             } else if (column.generationStrategy === "rowid") {
                 c += " INT DEFAULT unique_rowid()";

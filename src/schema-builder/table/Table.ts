@@ -319,7 +319,7 @@ export class Table {
     static create(entityMetadata: EntityMetadata, driver: Driver): Table {
         const database = entityMetadata.database || driver.database;
         const schema = entityMetadata.schema || driver.schema;
-        const name = entityMetadata.name.split(".").pop()!;
+        const name = entityMetadata.tableName.split(".").pop()!;
 
         const options: TableOptions = {
             database,

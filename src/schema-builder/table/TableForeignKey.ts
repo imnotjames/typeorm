@@ -106,7 +106,7 @@ export class TableForeignKey {
     static create(metadata: ForeignKeyMetadata, driver: Driver): TableForeignKey {
         const referencedDatabase = metadata.referencedEntityMetadata.database || driver.database;
         const referencedSchema = metadata.referencedEntityMetadata.schema || driver.schema;
-        const referencedTableName = metadata.referencedEntityMetadata.tableName;
+        const referencedTableName = metadata.referencedEntityMetadata.tableName.split(".").pop()!;
 
         return new TableForeignKey(<TableForeignKeyOptions>{
             name: metadata.name,

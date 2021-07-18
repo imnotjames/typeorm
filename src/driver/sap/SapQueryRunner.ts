@@ -955,6 +955,8 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                     return new TableForeignKey({
                         name: dbForeignKey["CONSTRAINT_NAME"],
                         columnNames: foreignKeys.map(dbFk => dbFk["COLUMN_NAME"]),
+                        referencedDatabase: table.database,
+                        referencedSchema: table.schema,
                         referencedTableName: table.name,
                         referencedColumnNames: foreignKeys.map(dbFk => dbFk["REFERENCED_COLUMN_NAME"]),
                         onDelete: dbForeignKey["DELETE_RULE"] === "RESTRICT" ? "NO ACTION" : dbForeignKey["DELETE_RULE"],

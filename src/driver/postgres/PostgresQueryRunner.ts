@@ -1865,6 +1865,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
                 return new TableForeignKey({
                     name: dbForeignKey["constraint_name"],
                     columnNames: foreignKeys.map(dbFk => dbFk["column_name"]),
+                    referencedDatabase: currentDatabase,
                     referencedSchema: dbForeignKey["referenced_table_schema"],
                     referencedTableName: dbForeignKey["referenced_table_name"],
                     referencedColumnNames: foreignKeys.map(dbFk => dbFk["referenced_column_name"]),

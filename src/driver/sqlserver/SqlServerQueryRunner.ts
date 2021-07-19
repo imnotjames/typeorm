@@ -1387,52 +1387,63 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
                 : `SELECT * FROM "INFORMATION_SCHEMA"."TABLES" WHERE "TABLE_TYPE" = 'BASE TABLE'`;
             const allTablesResults: ObjectLiteral[] = await this.query(allTablesSql);
 
-            const tablesByCatalog: { [key: string ]: { TABLE_NAME: string, TABLE_SCHEMA: string }[] } = allTablesResults.reduce((c, { TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME }) => {
-                c[TABLE_CATALOG] = c[TABLE_CATALOG] || [];
-                c[TABLE_CATALOG].push({ TABLE_SCHEMA, TABLE_NAME });
-                return c;
-            }, {})
+            if (allTablesResults.length > 0) {
+                const tablesByCatalog: { [key: string]: { TABLE_NAME: string, TABLE_SCHEMA: string }[] } = allTablesResults.reduce(
+                    (c, { TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME }) => {
+                        c[TABLE_CATALOG] = c[TABLE_CATALOG] || [];
+                        c[TABLE_CATALOG].push({ TABLE_SCHEMA, TABLE_NAME });
+                        return c;
+                    },
+                    {}
+                )
 
-            const foreignKeysSql = Object.entries(tablesByCatalog).map(([TABLE_CATALOG, tables]) => {
-                const conditions = tables.map(({ TABLE_SCHEMA, TABLE_NAME }) => {
-                    return `("fk"."referenced_object_id" = OBJECT_ID('"${TABLE_CATALOG}"."${TABLE_SCHEMA}"."${TABLE_NAME}"'))`
-                }).join(" OR ")
+                const foreignKeysSql = Object.entries(tablesByCatalog).map(([ TABLE_CATALOG, tables ]) => {
+                    const conditions = tables.map(({ TABLE_SCHEMA, TABLE_NAME }) => {
+                        return `("fk"."referenced_object_id" = OBJECT_ID('"${TABLE_CATALOG}"."${TABLE_SCHEMA}"."${TABLE_NAME}"'))`
+                    }).join(" OR ")
 
-                return `
-                    SELECT DISTINCT
-                        '${TABLE_CATALOG}' AS "TABLE_CATALOG",
-                        OBJECT_SCHEMA_NAME("fk"."parent_object_id", DB_ID('${TABLE_CATALOG}')) AS "TABLE_SCHEMA",
-                        OBJECT_NAME("fk"."parent_object_id", DB_ID('${TABLE_CATALOG}')) AS "TABLE_NAME",
-                        "fk"."name" AS "CONSTRAINT_NAME"
-                    FROM "${TABLE_CATALOG}"."sys"."foreign_keys" AS "fk"
-                    WHERE (${conditions})
-                `;
-            }).join(" UNION ALL ");
+                    return `
+                        SELECT DISTINCT '${TABLE_CATALOG}' AS                                              "TABLE_CATALOG",
+                                        OBJECT_SCHEMA_NAME("fk"."parent_object_id",
+                                                           DB_ID('${TABLE_CATALOG}')) AS                   "TABLE_SCHEMA",
+                                        OBJECT_NAME("fk"."parent_object_id", DB_ID('${TABLE_CATALOG}')) AS "TABLE_NAME",
+                                        "fk"."name" AS                                                     "CONSTRAINT_NAME"
+                        FROM "${TABLE_CATALOG}"."sys"."foreign_keys" AS "fk"
+                        WHERE (${conditions})
+                    `;
+                }).join(" UNION ALL ");
 
-            const foreignKeys: { TABLE_CATALOG: string, TABLE_SCHEMA: string, TABLE_NAME: string, CONSTRAINT_NAME: string }[] = await this.query(foreignKeysSql);
+                const foreignKeys: { TABLE_CATALOG: string, TABLE_SCHEMA: string, TABLE_NAME: string, CONSTRAINT_NAME: string }[] = await this.query(
+                    foreignKeysSql);
 
-            await Promise.all(foreignKeys.map(async ({ TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME }) => {
-                // Disable the constraint first.
-                await this.query(
-                    `ALTER TABLE "${TABLE_CATALOG}"."${TABLE_SCHEMA}"."${TABLE_NAME}" ` +
-                    `NOCHECK CONSTRAINT "${CONSTRAINT_NAME}"`
-                );
+                await Promise.all(foreignKeys.map(async ({
+                    TABLE_CATALOG,
+                    TABLE_SCHEMA,
+                    TABLE_NAME,
+                    CONSTRAINT_NAME
+                }) => {
+                    // Disable the constraint first.
+                    await this.query(
+                        `ALTER TABLE "${TABLE_CATALOG}"."${TABLE_SCHEMA}"."${TABLE_NAME}" ` +
+                        `NOCHECK CONSTRAINT "${CONSTRAINT_NAME}"`
+                    );
 
-                await this.query(
-                    `ALTER TABLE "${TABLE_CATALOG}"."${TABLE_SCHEMA}"."${TABLE_NAME}" ` +
-                    `DROP CONSTRAINT "${CONSTRAINT_NAME}" -- FROM CLEAR`
-                );
-            }));
+                    await this.query(
+                        `ALTER TABLE "${TABLE_CATALOG}"."${TABLE_SCHEMA}"."${TABLE_NAME}" ` +
+                        `DROP CONSTRAINT "${CONSTRAINT_NAME}" -- FROM CLEAR`
+                    );
+                }));
 
-            await Promise.all(allTablesResults.map(tablesResult => {
-                if (tablesResult["TABLE_NAME"].startsWith("#")) {
-                    // don't try to drop temporary tables
-                    return;
-                }
+                await Promise.all(allTablesResults.map(tablesResult => {
+                    if (tablesResult["TABLE_NAME"].startsWith("#")) {
+                        // don't try to drop temporary tables
+                        return;
+                    }
 
-                const dropTableSql = `DROP TABLE "${tablesResult["TABLE_CATALOG"]}"."${tablesResult["TABLE_SCHEMA"]}"."${tablesResult["TABLE_NAME"]}"`;
-                return this.query(dropTableSql);
-            }));
+                    const dropTableSql = `DROP TABLE "${tablesResult["TABLE_CATALOG"]}"."${tablesResult["TABLE_SCHEMA"]}"."${tablesResult["TABLE_NAME"]}"`;
+                    return this.query(dropTableSql);
+                }));
+            }
 
             await this.commitTransaction();
 

@@ -333,7 +333,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      */
     async hasTable(tableOrName: Table|string): Promise<boolean> {
         const parsedTableName = this.parseTableName(tableOrName);
-        const sql = `SELECT * FROM "information_schema"."tables" WHERE "table_schema" = ${parsedTableName.schema} AND "table_name" = ${parsedTableName.tableName}`;
+        const sql = `SELECT * FROM "information_schema"."tables" WHERE "table_schema" = ${parsedTableName.schema} AND "table_name" = ${parsedTableName.name}`;
         const result = await this.query(sql);
         return result.length ? true : false;
     }
@@ -343,7 +343,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      */
     async hasColumn(tableOrName: Table|string, columnName: string): Promise<boolean> {
         const parsedTableName = this.parseTableName(tableOrName);
-        const sql = `SELECT * FROM "information_schema"."columns" WHERE "table_schema" = ${parsedTableName.schema} AND "table_name" = ${parsedTableName.tableName} AND "column_name" = '${columnName}'`;
+        const sql = `SELECT * FROM "information_schema"."columns" WHERE "table_schema" = ${parsedTableName.schema} AND "table_name" = ${parsedTableName.name} AND "column_name" = '${columnName}'`;
         const result = await this.query(sql);
         return result.length ? true : false;
     }
@@ -2076,7 +2076,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Checks if enum with the given name exist in the database.
      */
     protected async hasEnumType(table: Table, column: TableColumn): Promise<boolean> {
-        const schema = this.parseTableName(table).schema;
+        const { schema } = this.parseTableName(table);
         const enumName = this.buildEnumName(table, column, false, true);
         const sql = `SELECT "n"."nspname", "t"."typname" FROM "pg_type" "t" ` +
             `INNER JOIN "pg_namespace" "n" ON "n"."oid" = "t"."typnamespace" ` +
@@ -2308,18 +2308,29 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Returns object with table schema and table name.
      */
     protected parseTableName(target: Table|string) {
-        const tableName = target instanceof Table ? target.name : target;
-        if (tableName.indexOf(".") === -1) {
-            return {
-                schema: this.driver.options.schema ? `'${this.driver.options.schema}'` : "current_schema()",
-                tableName: `'${tableName}'`
-            };
-        } else {
-            return {
-                schema: `'${tableName.split(".")[0]}'`,
-                tableName: `'${tableName.split(".")[1]}'`
-            };
+        let schema: string | undefined;
+
+        if (target instanceof Table) {
+            schema = target.schema;
+            target = target.name;
         }
+
+        const splitTarget = target.split(".");
+
+        if (!schema) {
+            if (splitTarget.length > 1) {
+                schema = splitTarget.shift()!;
+            } else {
+                schema = this.driver.schema;
+            }
+        }
+
+        const name = splitTarget.pop()!;
+
+        return {
+            schema,
+            name,
+        };
     }
 
     /**

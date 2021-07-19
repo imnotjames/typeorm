@@ -295,9 +295,9 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
      */
     async hasTable(tableOrName: Table|string): Promise<boolean> {
         const parsedTableName = this.parseTableName(tableOrName);
-        const sql = `SELECT * FROM \`INFORMATION_SCHEMA\`.\`COLUMNS\` WHERE \`TABLE_SCHEMA\` = '${parsedTableName.database}' AND \`TABLE_NAME\` = '${parsedTableName.tableName}'`;
+        const sql = `SELECT * FROM \`INFORMATION_SCHEMA\`.\`COLUMNS\` WHERE \`TABLE_SCHEMA\` = '${parsedTableName.database}' AND \`TABLE_NAME\` = '${parsedTableName.name}'`;
         const result = await this.query(sql);
-        return result.length ? true : false;
+        return result.length > 0;
     }
 
     /**
@@ -306,9 +306,9 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
     async hasColumn(tableOrName: Table|string, column: TableColumn|string): Promise<boolean> {
         const parsedTableName = this.parseTableName(tableOrName);
         const columnName = column instanceof TableColumn ? column.name : column;
-        const sql = `SELECT * FROM \`INFORMATION_SCHEMA\`.\`COLUMNS\` WHERE \`TABLE_SCHEMA\` = '${parsedTableName.database}' AND \`TABLE_NAME\` = '${parsedTableName.tableName}' AND \`COLUMN_NAME\` = '${columnName}'`;
+        const sql = `SELECT * FROM \`INFORMATION_SCHEMA\`.\`COLUMNS\` WHERE \`TABLE_SCHEMA\` = '${parsedTableName.database}' AND \`TABLE_NAME\` = '${parsedTableName.name}' AND \`COLUMN_NAME\` = '${columnName}'`;
         const result = await this.query(sql);
-        return result.length ? true : false;
+        return result.length > 0;
     }
 
     /**
@@ -1256,8 +1256,6 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
             return [];
         }
 
-        const currentDatabase = await this.getCurrentDatabase();
-
         // The following SQL brought to you by:
         //   A terrible understanding of https://dev.mysql.com/doc/refman/8.0/en/information-schema-optimization.html
         //
@@ -1293,11 +1291,12 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
             // Avoid database directory scan: TABLE_NAME
             // We only use `TABLE_SCHEMA` and `TABLE_NAME` which is `SKIP_OPEN_TABLE`
             const tablesSql = tableNames.map(tableName => {
-                let [ database, name ] = tableName.split(".");
-                if (!name) {
-                    name = database;
-                    database = this.driver.database || currentDatabase;
+                if (!tableName) {
+                    return;
                 }
+
+                const { database, name } = this.parseTableName(tableName);
+
                 return `
                     SELECT \`TABLE_SCHEMA\`,
                            \`TABLE_NAME\`
@@ -1819,10 +1818,28 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
     }
 
     protected parseTableName(target: Table|string) {
-        const tableName = target instanceof Table ? target.name : target;
+        let database: string | undefined;
+
+        if (target instanceof Table) {
+            database = target.database;
+            target = target.name;
+        }
+
+        const splitTarget = target.split(".");
+
+        if (!database) {
+            if (splitTarget.length > 1) {
+                database = splitTarget.shift()!;
+            } else {
+                database = this.driver.database;
+            }
+        }
+
+        const name = splitTarget.pop()!;
+
         return {
-            database: tableName.indexOf(".") !== -1 ? tableName.split(".")[0] : this.driver.database,
-            tableName: tableName.indexOf(".") !== -1 ? tableName.split(".")[1] : tableName
+            database,
+            name,
         };
     }
 

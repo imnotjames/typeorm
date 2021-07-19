@@ -333,7 +333,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      */
     async hasTable(tableOrName: Table|string): Promise<boolean> {
         const parsedTableName = this.parseTableName(tableOrName);
-        const sql = `SELECT * FROM "information_schema"."tables" WHERE "table_schema" = ${parsedTableName.schema} AND "table_name" = ${parsedTableName.name}`;
+        const sql = `SELECT * FROM "information_schema"."tables" WHERE "table_schema" = '${parsedTableName.schema}' AND "table_name" = '${parsedTableName.name}'`;
         const result = await this.query(sql);
         return result.length ? true : false;
     }
@@ -343,7 +343,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      */
     async hasColumn(tableOrName: Table|string, columnName: string): Promise<boolean> {
         const parsedTableName = this.parseTableName(tableOrName);
-        const sql = `SELECT * FROM "information_schema"."columns" WHERE "table_schema" = ${parsedTableName.schema} AND "table_name" = ${parsedTableName.name} AND "column_name" = '${columnName}'`;
+        const sql = `SELECT * FROM "information_schema"."columns" WHERE "table_schema" = '${parsedTableName.schema}' AND "table_name" = '${parsedTableName.name}' AND "column_name" = '${columnName}'`;
         const result = await this.query(sql);
         return result.length ? true : false;
     }
@@ -2080,7 +2080,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
         const enumName = this.buildEnumName(table, column, false, true);
         const sql = `SELECT "n"."nspname", "t"."typname" FROM "pg_type" "t" ` +
             `INNER JOIN "pg_namespace" "n" ON "n"."oid" = "t"."typnamespace" ` +
-            `WHERE "n"."nspname" = ${schema} AND "t"."typname" = '${enumName}'`;
+            `WHERE "n"."nspname" = '${schema}' AND "t"."typname" = '${enumName}'`;
         const result = await this.query(sql);
         return result.length ? true : false;
     }

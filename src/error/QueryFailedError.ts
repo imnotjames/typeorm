@@ -10,7 +10,7 @@ export class QueryFailedError extends TypeORMError {
             driverError.toString()
                 .replace(/^error: /, "")
                 .replace(/^Error: /, "")
-                .replace(/^Request/, "")
+                .replace(/^Request/, "") + query
         );
 
         if (driverError) {

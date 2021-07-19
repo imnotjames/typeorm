@@ -237,9 +237,17 @@ export abstract class BaseQueryRunner {
         const foundTables = await this.loadTables([tableName]);
 
         if (foundTables.length > 0) {
-            this.cachedTablePaths[tableName] = this.getTablePath(foundTables[0]);
-            this.loadedTables.push(foundTables[0]);
-            return foundTables[0];
+            const foundTablePath = this.getTablePath(foundTables[0]);
+
+            const cachedTable = this.loadedTables.find((table) => this.getTablePath(table) === foundTablePath);
+
+            if (!cachedTable) {
+                this.cachedTablePaths[tableName] = this.getTablePath(foundTables[0]);
+                this.loadedTables.push(foundTables[0]);
+                return foundTables[0];
+            } else {
+                return cachedTable;
+            }
         } else {
             throw new TypeORMError(`Table "${tableName}" does not exist.`);
         }

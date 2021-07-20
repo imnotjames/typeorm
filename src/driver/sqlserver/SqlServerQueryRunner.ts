@@ -1958,10 +1958,16 @@ export class SqlServerQueryRunner extends BaseQueryRunner implements QueryRunner
     }
 
     protected createViewSql(view: View): Query {
+        const parsedTableName = this.parseTableName(view);
+
+        if (parsedTableName.database !== this.driver.database) {
+            throw new TypeORMError("Cannot Create View Across Database Boundaries");
+        }
+
         if (typeof view.expression === "string") {
-            return new Query(`CREATE VIEW ${this.escapePath(view)} AS ${view.expression}`);
+            return new Query(`CREATE VIEW "${parsedTableName.schema}"."${parsedTableName.name}" AS ${view.expression}`);
         } else {
-            return new Query(`CREATE VIEW ${this.escapePath(view)} AS ${view.expression(this.connection).getQuery()}`);
+            return new Query(`CREATE VIEW "${parsedTableName.schema}"."${parsedTableName.name}" AS ${view.expression(this.connection).getQuery()}`);
         }
     }
 
